@@ -3,589 +3,609 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Focus Scanner">
 <meta name="theme-color" content="#0a0c10">
 <title>Focus Store · Scanner</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<link rel="manifest" href="#" id="manifestLink">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/zxing-browser@latest/umd/index.min.js"></script>
 <style>
-  :root {
-    --bg: #0a0c10; --bg2: #111318; --bg3: #181c24;
-    --border: #2a3145; --accent: #3d6aff; --accent2: #6a3dff;
-    --green: #2ed573; --red: #ff4757; --gold: #f5c842;
-    --text: #e8ecf5; --text2: #8892aa; --text3: #5a6480;
-    --teal: #00c8a0;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0c10;--bg2:#111318;--bg3:#181c24;--bg4:#1e2330;
+  --border:#2a3145;--border2:#354060;
+  --accent:#3d6aff;--accent2:#6a3dff;--accent3:#00c8a0;--accent4:#ff6b35;
+  --gold:#f5c842;--red:#ff4757;--green:#2ed573;
+  --text:#e8ecf5;--text2:#8892aa;--text3:#5a6480;
+  --card:#141720;--card2:#1a1f2e;
+  --radius:14px;--radius2:10px;--font:'Segoe UI',system-ui,sans-serif;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font)}
+body{display:flex;flex-direction:column}
 
-  /* ── SCREENS ── */
-  .screen { display: none; height: 100vh; flex-direction: column; }
-  .screen.active { display: flex; }
+/* ── SCREENS ── */
+.screen{display:none;flex-direction:column;height:100%}
+.screen.active{display:flex}
 
-  /* ── PIN SCREEN ── */
-  #pinScreen {
-    align-items: center; justify-content: center;
-    background: radial-gradient(ellipse at 30% 50%, rgba(61,106,255,.15) 0%, transparent 60%), var(--bg);
-  }
-  .pin-box { width: 100%; max-width: 340px; padding: 0 24px; }
-  .pin-logo { text-align: center; margin-bottom: 32px; }
-  .pin-logo .logo-icon {
-    width: 72px; height: 72px; background: linear-gradient(135deg,var(--accent),var(--accent2));
-    border-radius: 20px; display: flex; align-items: center; justify-content: center;
-    font-size: 32px; margin: 0 auto 16px;
-    box-shadow: 0 0 30px rgba(61,106,255,.4);
-  }
-  .pin-logo h1 { font-size: 22px; font-weight: 800; }
-  .pin-logo p { color: var(--text2); font-size: 13px; margin-top: 4px; }
-  .pin-dots { display: flex; justify-content: center; gap: 12px; margin: 28px 0 24px; }
-  .pin-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); transition: all .2s; }
-  .pin-dot.filled { background: var(--accent); border-color: var(--accent); transform: scale(1.2); }
-  .pin-dot.error { background: var(--red); border-color: var(--red); }
-  .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .pin-btn {
-    height: 64px; background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
-    color: var(--text); font-size: 22px; font-weight: 700; cursor: pointer;
-    transition: all .15s; display: flex; align-items: center; justify-content: center;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .pin-btn:active { background: var(--accent); border-color: var(--accent); transform: scale(.95); }
-  .pin-btn.del { font-size: 18px; color: var(--text2); }
-  .pin-btn.empty { visibility: hidden; }
-  .pin-err { text-align: center; color: var(--red); font-size: 13px; margin-top: 12px; min-height: 20px; }
+/* ── LOGIN ── */
+#loginScreen{
+  align-items:center;justify-content:center;padding:24px;
+  background:radial-gradient(ellipse at 30% 40%,rgba(61,106,255,.15) 0%,transparent 60%),var(--bg);
+}
+.login-box{width:100%;max-width:360px;background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:36px 28px}
+.login-logo{text-align:center;margin-bottom:28px}
+.logo-icon{width:60px;height:60px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px}
+.login-logo h1{font-size:20px;font-weight:700}
+.login-logo p{font-size:12px;color:var(--text2);margin-top:3px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px}
+.field input{width:100%;padding:13px 15px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius2);color:var(--text);font-size:15px;outline:none;transition:border .2s}
+.field input:focus{border-color:var(--accent)}
+.btn-login{width:100%;padding:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:var(--radius2);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.login-err{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);color:var(--red);padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none;text-align:center}
 
-  /* ── MAIN APP ── */
-  #appScreen { background: var(--bg); }
+/* ── MAIN APP ── */
+#appScreen{background:var(--bg)}
+.topbar{
+  height:56px;background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0
+}
+.topbar-logo{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.topbar-title{font-size:14px;font-weight:700;flex:1}
+.topbar-user{font-size:11px;color:var(--text2)}
+.btn-logout{padding:6px 12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:12px;cursor:pointer}
+.btn-logout:hover{border-color:var(--red);color:var(--red)}
 
-  /* ── HEADER ── */
-  .app-header {
-    background: var(--bg2); border-bottom: 1px solid var(--border);
-    padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
-    flex-shrink: 0;
-  }
-  .app-header-brand { display: flex; align-items: center; gap: 10px; }
-  .app-header-brand .icon { width: 34px; height: 34px; background: linear-gradient(135deg,var(--accent),var(--accent2)); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-  .app-header-brand h1 { font-size: 15px; font-weight: 700; }
-  .app-header-brand p { font-size: 11px; color: var(--text2); }
-  .btn-lock { background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text2); padding: 7px 12px; font-size: 12px; cursor: pointer; }
+/* ── TABS ── */
+.tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{flex:1;padding:12px 8px;text-align:center;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;border:none;background:transparent;transition:all .2s;border-bottom:2px solid transparent}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 
-  /* ── TABS ── */
-  .app-tabs { display: flex; background: var(--bg2); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .app-tab { flex: 1; padding: 12px 8px; text-align: center; font-size: 12px; font-weight: 600; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s; }
-  .app-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+/* ── CONTENT ── */
+.content{flex:1;overflow-y:auto;padding:16px}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
 
-  /* ── CONTENT ── */
-  .app-content { flex: 1; overflow-y: auto; overflow-x: hidden; }
-  .tab-pane { display: none; padding: 16px; }
-  .tab-pane.active { display: block; }
+/* ── SCANNER ── */
+.scanner-wrap{position:relative;width:100%;max-width:500px;margin:0 auto}
+#video{width:100%;border-radius:var(--radius);display:block;background:#000}
+.scan-overlay{
+  position:absolute;inset:0;border-radius:var(--radius);pointer-events:none;
+  display:flex;align-items:center;justify-content:center;
+}
+.scan-frame{
+  width:65%;aspect-ratio:3/1;border:2px solid var(--accent);border-radius:8px;
+  box-shadow:0 0 0 9999px rgba(0,0,0,.45);position:relative
+}
+.scan-line{
+  position:absolute;left:0;right:0;height:2px;background:var(--accent);
+  animation:scanMove 2s ease-in-out infinite;top:0;opacity:.8
+}
+@keyframes scanMove{0%,100%{top:0}50%{top:calc(100% - 2px)}}
+.scan-hint{text-align:center;font-size:13px;color:var(--text2);margin-top:12px}
+.scan-btns{display:flex;gap:10px;margin-top:14px}
+.btn{padding:12px 20px;border:none;border-radius:var(--radius2);font-size:14px;font-weight:600;cursor:pointer;flex:1;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-success{background:var(--accent3);color:#000}
+.btn-ghost{background:var(--bg3);border:1px solid var(--border);color:var(--text2)}
+.btn-danger{background:var(--red);color:#fff}
+.btn-sm{padding:8px 14px;font-size:13px;flex:none}
 
-  /* ── SCANNER ── */
-  .scanner-wrap {
-    background: var(--bg2); border: 1px solid var(--border); border-radius: 16px;
-    overflow: hidden; position: relative; margin-bottom: 16px;
-  }
-  #scannerView { width: 100%; height: 260px; position: relative; background: #000; }
-  #scannerView video { width: 100%; height: 100%; object-fit: cover; }
-  #scannerView canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-  .scan-overlay {
-    position: absolute; inset: 0; pointer-events: none;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .scan-frame {
-    width: 220px; height: 120px; position: relative;
-  }
-  .scan-frame::before, .scan-frame::after,
-  .scan-frame span::before, .scan-frame span::after {
-    content: ''; position: absolute; width: 24px; height: 24px; border-color: var(--accent); border-style: solid;
-  }
-  .scan-frame::before { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
-  .scan-frame::after  { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
-  .scan-frame span::before { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
-  .scan-frame span::after  { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
-  .scan-line {
-    position: absolute; left: 10px; right: 10px; height: 2px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    animation: scanLine 2s ease-in-out infinite;
-  }
-  @keyframes scanLine { 0%,100%{top:10px;opacity:0} 10%{opacity:1} 50%{top:calc(100% - 10px)} 90%{opacity:1} }
+/* ── MANUAL INPUT ── */
+.manual-wrap{max-width:500px;margin:0 auto}
+.manual-wrap .field input{font-size:16px;padding:14px 15px}
+.search-btn{width:100%;padding:14px;background:var(--accent);border:none;border-radius:var(--radius2);color:#fff;font-size:15px;font-weight:600;cursor:pointer;margin-top:4px}
 
-  .scan-status { padding: 12px 16px; font-size: 13px; color: var(--text2); text-align: center; }
+/* ── PRODUCTO CARD ── */
+.prod-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:16px;max-width:500px;margin-left:auto;margin-right:auto;animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.prod-header{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px}
+.prod-img{width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;overflow:hidden}
+.prod-img img{width:100%;height:100%;object-fit:cover}
+.prod-info{flex:1;min-width:0}
+.prod-nombre{font-size:15px;font-weight:700;line-height:1.3;margin-bottom:4px}
+.prod-sku{font-size:12px;color:var(--text2);font-family:monospace}
+.prod-estado{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;margin-top:4px}
+.estado-nuevo{background:rgba(0,200,160,.12);color:var(--accent3)}
+.estado-usado{background:rgba(255,107,53,.12);color:var(--accent4)}
+.estado-openbox{background:rgba(245,200,66,.12);color:var(--gold)}
 
-  .btn-scan {
-    width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 15px; font-weight: 700;
-    cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 8px;
-  }
-  .btn-scan.start { background: linear-gradient(135deg,var(--accent),var(--accent2)); color: #fff; }
-  .btn-scan.stop  { background: rgba(255,71,87,.15); border: 1px solid var(--red); color: var(--red); }
-  .btn-scan:active { transform: scale(.97); }
+.data-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.data-item{background:var(--bg3);border-radius:10px;padding:12px}
+.data-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.data-value{font-size:16px;font-weight:800;letter-spacing:-.3px}
+.val-green{color:var(--green)}
+.val-blue{color:var(--accent)}
+.val-gold{color:var(--gold)}
+.val-teal{color:var(--accent3)}
+.val-red{color:var(--red)}
 
-  /* ── MANUAL SEARCH ── */
-  .search-row { display: flex; gap: 10px; margin-bottom: 16px; }
-  .search-row input {
-    flex: 1; padding: 13px 16px; background: var(--bg2); border: 1px solid var(--border);
-    border-radius: 12px; color: var(--text); font-size: 15px; outline: none;
-    transition: border .2s;
-  }
-  .search-row input:focus { border-color: var(--accent); }
-  .search-row button {
-    padding: 13px 20px; background: var(--accent); border: none; border-radius: 12px;
-    color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
-  }
-  .search-row button:active { transform: scale(.95); }
+/* ── STOCK EDITOR ── */
+.stock-editor{background:var(--bg2);border:1px solid var(--accent);border-radius:var(--radius);padding:16px;margin-top:10px}
+.stock-editor-title{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.stock-row{display:flex;align-items:center;gap:10px}
+.qty-btn{width:44px;height:44px;border:1px solid var(--border2);border-radius:10px;background:var(--bg3);color:var(--text);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.qty-btn:active{background:var(--bg4)}
+.qty-input{flex:1;padding:10px;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-size:20px;font-weight:700;text-align:center;outline:none;min-width:0}
+.qty-input:focus{border-color:var(--accent)}
+.save-stock-btn{padding:12px 20px;background:var(--accent3);border:none;border-radius:10px;color:#000;font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0}
 
-  /* ── RESULT CARD ── */
-  .result-card {
-    background: var(--bg2); border: 1px solid var(--border); border-radius: 16px;
-    overflow: hidden; animation: fadeIn .3s ease;
-  }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-  .result-header {
-    padding: 16px; border-bottom: 1px solid var(--border);
-    background: linear-gradient(135deg, rgba(61,106,255,.08), transparent);
-  }
-  .result-sku { font-size: 11px; color: var(--text3); font-family: monospace; margin-bottom: 4px; }
-  .result-name { font-size: 16px; font-weight: 700; line-height: 1.3; }
-  .result-badges { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-  .rbadge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
-  .rbadge-nuevo { background: rgba(0,200,160,.15); color: var(--teal); }
-  .rbadge-usado { background: rgba(255,107,53,.15); color: #ff6b35; }
-  .rbadge-openbox { background: rgba(245,200,66,.15); color: var(--gold); }
+/* ── HISTORIAL ── */
+.hist-item{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.hist-prod{font-size:13px;font-weight:600}
+.hist-meta{font-size:11px;color:var(--text2);margin-top:3px}
+.hist-diff{font-size:13px;font-weight:700;margin-top:4px}
+.empty-state{text-align:center;padding:48px 16px;color:var(--text3)}
+.empty-state .icon{font-size:40px;margin-bottom:10px}
+.empty-state p{font-size:14px}
 
-  .result-prices { padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .price-item { background: var(--bg3); border-radius: 10px; padding: 12px; }
-  .price-label { font-size: 10px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
-  .price-value { font-size: 20px; font-weight: 800; }
-  .price-green { color: var(--green); }
-  .price-teal  { color: var(--teal); }
-  .price-gold  { color: var(--gold); }
-  .price-blue  { color: var(--accent); }
+/* ── TOAST ── */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:none;width:calc(100% - 32px);max-width:400px}
+.toast-msg{padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.5);margin-bottom:8px;animation:fadeIn .25s ease;text-align:center}
+.toast-success{background:rgba(46,213,115,.15);border:1px solid rgba(46,213,115,.4);color:var(--green)}
+.toast-error{background:rgba(255,71,87,.15);border:1px solid rgba(255,71,87,.4);color:var(--red)}
+.toast-info{background:rgba(61,106,255,.15);border:1px solid rgba(61,106,255,.4);color:var(--accent)}
+.toast-warn{background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.4);color:var(--gold)}
 
-  .result-stock { padding: 0 16px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .stock-item { background: var(--bg3); border-radius: 10px; padding: 12px; }
+/* ── SPINNER ── */
+.spinner{width:22px;height:22px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-  .result-not-found {
-    background: rgba(255,71,87,.08); border: 1px solid rgba(255,71,87,.2);
-    border-radius: 16px; padding: 32px 16px; text-align: center;
-    animation: fadeIn .3s ease;
-  }
-  .result-not-found .icon { font-size: 40px; margin-bottom: 12px; }
-  .result-not-found h3 { color: var(--red); font-size: 16px; margin-bottom: 6px; }
-  .result-not-found p { color: var(--text2); font-size: 13px; }
-
-  /* ── HISTORY TAB ── */
-  .hist-list { display: flex; flex-direction: column; gap: 10px; }
-  .hist-card {
-    background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
-    padding: 12px 14px; cursor: pointer; transition: background .15s;
-  }
-  .hist-card:active { background: var(--bg3); }
-  .hist-card-sku { font-size: 11px; color: var(--text3); font-family: monospace; }
-  .hist-card-name { font-size: 14px; font-weight: 600; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .hist-card-price { font-size: 16px; font-weight: 800; color: var(--green); }
-  .hist-card-time { font-size: 11px; color: var(--text3); margin-top: 2px; }
-  .empty-hist { text-align: center; padding: 48px 16px; color: var(--text3); }
-  .empty-hist .icon { font-size: 40px; margin-bottom: 12px; }
-
-  /* ── LOADING ── */
-  .loading-wrap { text-align: center; padding: 40px 16px; color: var(--text2); }
-  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── TOAST ── */
-  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 999; width: 90%; max-width: 340px; }
-  .toast-msg { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-top: 8px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 20px rgba(0,0,0,.5); }
-  .toast-success { border-color: rgba(46,213,115,.4); color: var(--green); }
-  .toast-error   { border-color: rgba(255,71,87,.4);  color: var(--red); }
-  .toast-info    { border-color: rgba(61,106,255,.4);  color: var(--accent); }
+.scanning-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(61,106,255,.15);border:1px solid var(--accent);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--accent);margin-bottom:12px}
+.scanning-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulse 1s ease infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
 </head>
 <body>
 
-<!-- PIN SCREEN -->
-<div id="pinScreen" class="screen active">
-  <div class="pin-box">
-    <div class="pin-logo">
-      <div class="logo-icon">📊</div>
-      <h1>Focus Store</h1>
-      <p>Consulta de Precios</p>
+<!-- LOGIN -->
+<div class="screen active" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="logo-icon">📱</div>
+      <h1>Focus Scanner</h1>
+      <p>Control de Inventario · Focus Store</p>
     </div>
-    <div class="pin-dots">
-      <div class="pin-dot" id="d0"></div>
-      <div class="pin-dot" id="d1"></div>
-      <div class="pin-dot" id="d2"></div>
-      <div class="pin-dot" id="d3"></div>
+    <div class="login-err" id="loginErr">Usuario o contraseña incorrectos</div>
+    <div class="field">
+      <label>Usuario</label>
+      <input type="text" id="loginUser" placeholder="tu.usuario" autocomplete="username" autocapitalize="none">
     </div>
-    <div class="pin-grid">
-      <button class="pin-btn" onclick="pinPress('1')">1</button>
-      <button class="pin-btn" onclick="pinPress('2')">2</button>
-      <button class="pin-btn" onclick="pinPress('3')">3</button>
-      <button class="pin-btn" onclick="pinPress('4')">4</button>
-      <button class="pin-btn" onclick="pinPress('5')">5</button>
-      <button class="pin-btn" onclick="pinPress('6')">6</button>
-      <button class="pin-btn" onclick="pinPress('7')">7</button>
-      <button class="pin-btn" onclick="pinPress('8')">8</button>
-      <button class="pin-btn" onclick="pinPress('9')">9</button>
-      <button class="pin-btn empty"></button>
-      <button class="pin-btn" onclick="pinPress('0')">0</button>
-      <button class="pin-btn del" onclick="pinDel()">⌫</button>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <div class="pin-err" id="pinErr"></div>
+    <button class="btn-login" id="btnLogin" onclick="doLogin()">Iniciar Sesión</button>
   </div>
 </div>
 
-<!-- APP SCREEN -->
-<div id="appScreen" class="screen">
-  <div class="app-header">
-    <div class="app-header-brand">
-      <div class="icon">📊</div>
-      <div>
-        <h1>Focus Store</h1>
-        <p>Consulta de Precios</p>
-      </div>
-    </div>
-    <button class="btn-lock" onclick="lockApp()">🔒 Salir</button>
+<!-- APP -->
+<div class="screen" id="appScreen">
+  <div class="topbar">
+    <div class="topbar-logo">📱</div>
+    <div class="topbar-title">Focus Scanner</div>
+    <div class="topbar-user" id="topbarUser"></div>
+    <button class="btn-logout" onclick="doLogout()">Salir</button>
   </div>
-
-  <div class="app-tabs">
-    <div class="app-tab active" onclick="switchTab('scanner')">📷 Escanear</div>
-    <div class="app-tab" onclick="switchTab('manual')">🔍 Buscar</div>
-    <div class="app-tab" onclick="switchTab('historial')">🕓 Historial</div>
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('scanner')" id="tabScanner">📷 Escanear</button>
+    <button class="tab" onclick="showTab('manual')" id="tabManual">🔍 Buscar</button>
+    <button class="tab" onclick="showTab('historial')" id="tabHistorial">📋 Historial</button>
   </div>
-
-  <div class="app-content">
-
+  <div class="content">
     <!-- SCANNER TAB -->
-    <div class="tab-pane active" id="tab-scanner">
+    <div class="tab-pane active" id="paneScanner">
       <div class="scanner-wrap">
-        <div id="scannerView">
+        <div id="scannerActive" style="display:none">
+          <div class="scanning-badge"><span class="scanning-dot"></span> Escaneando...</div>
+          <video id="video" playsinline autoplay muted></video>
           <div class="scan-overlay">
-            <div class="scan-frame">
-              <span></span>
-              <div class="scan-line"></div>
-            </div>
+            <div class="scan-frame"><div class="scan-line"></div></div>
+          </div>
+          <p class="scan-hint">Apunta la cámara al código de barras del producto</p>
+          <div class="scan-btns">
+            <button class="btn btn-ghost" onclick="stopScanner()">✕ Cancelar</button>
           </div>
         </div>
-        <div class="scan-status" id="scanStatus">Presiona el botón para activar la cámara</div>
+        <div id="scannerIdle">
+          <button class="btn btn-primary" style="width:100%;padding:16px;font-size:16px;margin-bottom:12px" onclick="startScanner()">
+            📷 Activar Cámara y Escanear
+          </button>
+          <p style="text-align:center;font-size:12px;color:var(--text3)">O usa la pestaña "Buscar" para ingresar el SKU manualmente</p>
+        </div>
+        <div id="scanResult"></div>
       </div>
-      <button class="btn-scan start" id="btnScan" onclick="toggleScanner()">
-        📷 Activar Cámara
-      </button>
-      <div style="margin-top:16px" id="scanResult"></div>
     </div>
 
     <!-- MANUAL TAB -->
-    <div class="tab-pane" id="tab-manual">
-      <div class="search-row">
-        <input type="text" id="manualSku" placeholder="Escribe el SKU..." autocomplete="off"
-          onkeydown="if(event.key==='Enter') buscarManual()">
-        <button onclick="buscarManual()">🔍</button>
+    <div class="tab-pane" id="paneManual">
+      <div class="manual-wrap">
+        <div class="field">
+          <label>SKU del Producto</label>
+          <input type="text" id="manualSku" placeholder="Ej. 698813014507" autocapitalize="none"
+            onkeydown="if(event.key==='Enter') buscarManual()">
+        </div>
+        <button class="search-btn" onclick="buscarManual()">🔍 Buscar Producto</button>
+        <div id="manualResult"></div>
       </div>
-      <div id="manualResult"></div>
     </div>
 
     <!-- HISTORIAL TAB -->
-    <div class="tab-pane" id="tab-historial">
-      <div class="hist-list" id="histList"></div>
+    <div class="tab-pane" id="paneHistorial">
+      <div id="historialList">
+        <div class="empty-state"><div class="icon">📋</div><p>Sin cambios en esta sesión</p></div>
+      </div>
     </div>
-
   </div>
 </div>
 
 <div id="toast"></div>
 
 <script>
-// ===== CONFIG =====
-const GS_URL = 'https://script.google.com/macros/s/AKfycbxwMiizG7po3Gy3EnpIAAncNMx3puGrIe3PZWByWCG6l_mcyIbbKrQauKG6oDZrnvWT/exec';
-const PIN_CORRECTO = '1234'; // ← Cambia este PIN
-let productos = [];
-let historial = [];
-let scannerActivo = false;
-let pinActual = '';
+// ── SUPABASE ──
+const SUPABASE_URL = 'https://uzhjnedhmbvgfqqssuov.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_trBqjIA08Bl0pcle8deARw_ySykjCeo';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ===== PIN =====
-function pinPress(n) {
-  if(pinActual.length >= 4) return;
-  pinActual += n;
-  actualizarDots();
-  if(pinActual.length === 4) {
-    setTimeout(() => validarPin(), 200);
-  }
-}
-function pinDel() {
-  pinActual = pinActual.slice(0,-1);
-  actualizarDots();
-  document.getElementById('pinErr').textContent = '';
-}
-function actualizarDots() {
-  for(let i=0;i<4;i++) {
-    const d = document.getElementById('d'+i);
-    d.className = 'pin-dot' + (i < pinActual.length ? ' filled' : '');
-  }
-}
-function validarPin() {
-  if(pinActual === PIN_CORRECTO) {
-    document.getElementById('pinScreen').classList.remove('active');
-    document.getElementById('appScreen').classList.add('active');
-    cargarProductos();
-  } else {
-    for(let i=0;i<4;i++) document.getElementById('d'+i).className='pin-dot error';
-    document.getElementById('pinErr').textContent = 'PIN incorrecto, intenta de nuevo';
-    setTimeout(()=>{
-      pinActual='';
-      actualizarDots();
-      document.getElementById('pinErr').textContent='';
-    }, 1000);
-  }
-}
-function lockApp() {
-  pinActual='';
-  actualizarDots();
-  detenerScanner();
-  document.getElementById('appScreen').classList.remove('active');
-  document.getElementById('pinScreen').classList.add('active');
-}
-
-// ===== CARGAR DATOS =====
-function cargarProductos() {
-  return new Promise((resolve) => {
-    const cbName = '_gs_cb_' + Date.now();
-    const script = document.createElement('script');
-    const timeout = setTimeout(() => {
-      delete window[cbName]; script.remove();
-      showToast('Sin conexión a Sheets', 'error');
-      resolve([]);
-    }, 15000);
-    window[cbName] = (data) => {
-      clearTimeout(timeout); delete window[cbName]; script.remove();
-      if(data.Productos) {
-        productos = data.Productos.map(r => ({
-          id: r.id||'', sku: String(r.sku||''), cantidad: parseInt(r.cantidad)||0,
-          producto: r.producto||'', categoria: r.categoria||'', estado: r.estado||'Nuevo',
-          costoUSD: parseFloat(r.costoUSD)||0, costoExtra: parseFloat(r.costoExtra)||0,
-          fleteL: parseFloat(r.fleteL)||0, nivel: r.nivel||'Normal',
-          overrideBanda: r.overrideBanda||'', ajusteManual: parseFloat(r.ajusteManual)||0,
-          descuento: parseFloat(r.descuento)||0,
-        }));
-        showToast(`✅ ${productos.length} productos cargados`, 'info');
-      }
-      resolve(productos);
-    };
-    script.src = GS_URL + '?action=getAll&callback=' + cbName;
-    script.onerror = () => { clearTimeout(timeout); delete window[cbName]; script.remove(); resolve([]); };
-    document.head.appendChild(script);
-  });
-}
-
-// ===== CÁLCULOS (misma lógica que Precio Inteligente) =====
-const PARAMETROS = {
+// ── ESTADO ──
+let currentUser = null;
+let parametros = {
   tipoCambio: 27, isvNuevo: 0.15, isvUsado: 0,
   bandas: [
-    {banda:'Bajo',    excelente:.60,normal:.56,alto:.52,desde:0,      hasta:30},
-    {banda:'Medio',   excelente:.46,normal:.42,alto:.38,desde:30.01,  hasta:400},
-    {banda:'Alto',    excelente:.34,normal:.30,alto:.26,desde:400.01, hasta:1000},
-    {banda:'Premium', excelente:.22,normal:.18,alto:.14,desde:1001,   hasta:999999}
+    {banda:'Bajo',    excelente:.60, normal:.56, alto:.52, desde:0,      hasta:30},
+    {banda:'Medio',   excelente:.46, normal:.42, alto:.38, desde:30.01,  hasta:400},
+    {banda:'Alto',    excelente:.34, normal:.30, alto:.26, desde:400.01, hasta:1000},
+    {banda:'Premium', excelente:.22, normal:.18, alto:.14, desde:1001,   hasta:999999}
   ],
   descMax: [
-    {banda:'Bajo',    excelente:.12,normal:.11,alto:.10},
-    {banda:'Medio',   excelente:.09,normal:.08,alto:.07},
-    {banda:'Alto',    excelente:.06,normal:.05,alto:.04},
-    {banda:'Premium', excelente:.03,normal:.02,alto:.01}
+    {banda:'Bajo',excelente:.12,normal:.11,alto:.10},
+    {banda:'Medio',excelente:.09,normal:.08,alto:.07},
+    {banda:'Alto',excelente:.06,normal:.05,alto:.04},
+    {banda:'Premium',excelente:.03,normal:.02,alto:.01}
   ]
 };
+let historialSesion = [];
+let scannerCtrl = null;
 
+// ── LOGIN ──
+async function doLogin() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  if (!u || !p) { mostrarErr(true); return; }
+  const btn = document.getElementById('btnLogin');
+  btn.innerHTML = '<div class="spinner"></div>';
+  btn.disabled = true;
+  try {
+    // Cargar usuarios
+    const { data: rows, error } = await sb.from('usuarios').select('*').eq('activo', true);
+    if (!error && rows && rows.length > 0) {
+      const found = rows.find(x => x.user === u && x.pass === p);
+      if (!found) { mostrarErr(true); return; }
+      // Solo admin, gerencia y ventas pueden usar el scanner
+      if (!['admin','gerencia','ventas','bodega'].includes(found.rol)) {
+        mostrarErr(true); return;
+      }
+      currentUser = found;
+      // Cargar parámetros
+      await cargarParametros();
+      iniciarApp();
+    } else {
+      mostrarErr(true);
+    }
+  } catch(e) {
+    mostrarErr(true);
+  } finally {
+    btn.innerHTML = 'Iniciar Sesión';
+    btn.disabled = false;
+  }
+}
+
+function mostrarErr(v) {
+  document.getElementById('loginErr').style.display = v ? 'block' : 'none';
+}
+
+async function cargarParametros() {
+  try {
+    const { data, error } = await sb.rpc('get_all_data', { p_user: currentUser.user });
+    if (!error && data) {
+      const params = data.params || [];
+      params.forEach(r => {
+        try { parametros[r.clave] = JSON.parse(r.valor); } catch(e) {}
+      });
+    }
+  } catch(e) {}
+}
+
+function iniciarApp() {
+  document.getElementById('loginScreen').classList.remove('active');
+  document.getElementById('appScreen').classList.add('active');
+  document.getElementById('topbarUser').textContent = currentUser.nombre + ' · ' + currentUser.rol;
+  document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+}
+
+function doLogout() {
+  if (scannerCtrl) stopScanner();
+  currentUser = null;
+  historialSesion = [];
+  document.getElementById('appScreen').classList.remove('active');
+  document.getElementById('loginScreen').classList.add('active');
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  mostrarErr(false);
+}
+
+// ── TABS ──
+function showTab(name) {
+  ['scanner','manual','historial'].forEach(t => {
+    document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1)).classList.toggle('active', t===name);
+    document.getElementById('pane'+t.charAt(0).toUpperCase()+t.slice(1)).classList.toggle('active', t===name);
+  });
+  if (name !== 'scanner' && scannerCtrl) stopScanner();
+  if (name === 'historial') renderHistorial();
+}
+
+// ── SCANNER ──
+async function startScanner() {
+  try {
+    document.getElementById('scannerIdle').style.display = 'none';
+    document.getElementById('scannerActive').style.display = 'block';
+    document.getElementById('scanResult').innerHTML = '';
+
+    const hints = new Map();
+    const formats = [window.ZXingBrowser?.BarcodeFormat?.CODE_128].filter(Boolean);
+
+    const codeReader = new window.ZXingBrowser.BrowserMultiFormatReader(hints);
+    scannerCtrl = codeReader;
+
+    const videoEl = document.getElementById('video');
+    const devices = await window.ZXingBrowser.BrowserMultiFormatReader.listVideoInputDevices();
+    // Preferir cámara trasera
+    const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
+    const deviceId = backCam?.deviceId;
+
+    codeReader.decodeFromVideoDevice(deviceId, videoEl, (result, err) => {
+      if (result) {
+        const sku = result.getText();
+        stopScanner();
+        buscarProducto(sku, 'scanResult');
+      }
+    });
+  } catch(e) {
+    stopScanner();
+    showToast('No se pudo acceder a la cámara. Usa la búsqueda manual.', 'error');
+  }
+}
+
+function stopScanner() {
+  if (scannerCtrl) {
+    try { scannerCtrl.reset(); } catch(e) {}
+    scannerCtrl = null;
+  }
+  document.getElementById('scannerIdle').style.display = 'block';
+  document.getElementById('scannerActive').style.display = 'none';
+}
+
+// ── BÚSQUEDA MANUAL ──
+function buscarManual() {
+  const sku = document.getElementById('manualSku').value.trim();
+  if (!sku) { showToast('Ingresa un SKU', 'warn'); return; }
+  buscarProducto(sku, 'manualResult');
+}
+
+// ── BUSCAR PRODUCTO ──
+async function buscarProducto(sku, containerId) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = `<div class="prod-card" style="text-align:center;padding:24px"><div class="spinner"></div><p style="margin-top:10px;color:var(--text2);font-size:13px">Buscando ${sku}...</p></div>`;
+
+  try {
+    const { data, error } = await sb
+      .from('productos')
+      .select('*')
+      .eq('sku', sku)
+      .limit(1);
+
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) {
+      container.innerHTML = `<div class="prod-card" style="text-align:center;padding:24px">
+        <div style="font-size:36px;margin-bottom:10px">🔍</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">Producto no encontrado</div>
+        <div style="font-size:13px;color:var(--text2)">No existe ningún producto con SKU <strong>${sku}</strong></div>
+      </div>`;
+      return;
+    }
+
+    renderProductoCard(data[0], containerId);
+  } catch(e) {
+    container.innerHTML = `<div class="prod-card" style="text-align:center;padding:24px;color:var(--red)">❌ Error: ${e.message}</div>`;
+  }
+}
+
+// ── CÁLCULOS (mismas fórmulas que el sistema principal) ──
 function calcProd(p) {
-  const tc = PARAMETROS.tipoCambio;
-  const costoTotalUSD = (parseFloat(p.costoUSD)||0) + (parseFloat(p.costoExtra)||0) + ((parseFloat(p.fleteL)||0)/tc);
+  const tc = parametros.tipoCambio || 27;
+  const costoExtraUSD = parseFloat(p.costo_extra)||0;
+  const costoProvUSD  = parseFloat(p.costo_usd)||0;
+  const fleteL        = parseFloat(p.flete_l)||0;
+  const fleteUSD      = fleteL / tc;
+  const costoTotalUSD = costoProvUSD + costoExtraUSD + fleteUSD;
   const costoTotalLPS = costoTotalUSD * tc;
-  const isv = p.estado==='Nuevo' ? PARAMETROS.isvNuevo : PARAMETROS.isvUsado;
+  const isv = (p.estado==='Nuevo') ? (parametros.isvNuevo||0.15) : 0;
 
   let bandaAuto = 'Bajo';
-  for(const b of PARAMETROS.bandas) { if(costoTotalUSD>=b.desde && costoTotalUSD<=b.hasta){bandaAuto=b.banda;break;} }
-  const bandaEfectiva = (p.overrideBanda||'').trim() || bandaAuto;
+  for(const b of (parametros.bandas||[])) {
+    if(costoTotalUSD >= b.desde && costoTotalUSD <= b.hasta) { bandaAuto = b.banda; break; }
+  }
+  const bandaEfectiva = (p.override_banda||'').trim() || bandaAuto;
   const nivelKey = (p.nivel||'Normal').toLowerCase();
-  const bandaRow = PARAMETROS.bandas.find(b=>b.banda===bandaEfectiva)||PARAMETROS.bandas[0];
-  const margenBase = bandaRow[nivelKey]||bandaRow.normal||0.40;
-  const margenFinal = margenBase + (parseFloat(p.ajusteManual)||0);
+  const bandaRow = (parametros.bandas||[]).find(b=>b.banda===bandaEfectiva) || {normal:.40};
+  const margenBase = bandaRow[nivelKey] || bandaRow.normal || 0.40;
+  const ajusteManual = parseFloat(p.ajuste_manual)||0;
+  const margenFinal = margenBase + ajusteManual;
   const precioNeto = costoTotalLPS * (1 + margenFinal);
-  const precioConISV = p.estado==='Nuevo' ? precioNeto*(1+isv) : precioNeto;
-  const descIngresadoPct = parseFloat(p.descuento||0)/100;
+  const precioConISV = (p.estado==='Nuevo') ? precioNeto * (1 + isv) : precioNeto;
+  const descIngresadoPct = parseFloat(p.descuento||0) / 100;
   const precioFinalDesc = precioConISV * (1 - descIngresadoPct);
 
-  return { precioConISV, precioFinalDesc, descIngresadoPct: descIngresadoPct*100, bandaEfectiva };
+  return { costoTotalLPS, margenFinal, precioConISV, precioFinalDesc };
 }
 
 function fmtLPS(v) { return 'L ' + parseFloat(v||0).toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtPct(v) { return (parseFloat(v||0)*100).toFixed(1)+'%'; }
 
-// ===== BUSCAR PRODUCTO =====
-function buscarPorSKU(sku) {
-  const skuClean = String(sku||'').trim();
-  return productos.find(p => String(p.sku).trim() === skuClean);
+// ── RENDER PRODUCTO ──
+function renderProductoCard(p, containerId) {
+  const c = calcProd(p);
+  const esAdmin = ['admin','gerencia'].includes(currentUser?.rol);
+  const puedeEditar = esAdmin || currentUser?.puede_editar_stock === true;
+  const cantidad = parseInt(p.cantidad)||0;
+  const cantColor = cantidad === 0 ? 'val-red' : cantidad <= (parseInt(p.min_stock)||0) ? 'val-gold' : 'val-green';
+
+  // Campos según rol
+  let dataHTML = `
+    <div class="data-item">
+      <div class="data-label">Cantidad en Stock</div>
+      <div class="data-value ${cantColor}">${cantidad} uds.</div>
+    </div>
+    <div class="data-item">
+      <div class="data-label">Precio Final c/Desc</div>
+      <div class="data-value val-teal">${fmtLPS(c.precioFinalDesc)}</div>
+    </div>
+  `;
+
+  if (esAdmin) {
+    dataHTML += `
+      <div class="data-item">
+        <div class="data-label">Costo Total LPS</div>
+        <div class="data-value val-gold">${fmtLPS(c.costoTotalLPS)}</div>
+      </div>
+      <div class="data-item">
+        <div class="data-label">Margen Final %</div>
+        <div class="data-value val-blue">${fmtPct(c.margenFinal)}</div>
+      </div>
+      <div class="data-item" style="grid-column:1/-1">
+        <div class="data-label">Precio c/ISV (Col X)</div>
+        <div class="data-value val-green">${fmtLPS(c.precioConISV)}</div>
+      </div>
+    `;
+  }
+
+  const imgHTML = p.imagen
+    ? `<div class="prod-img"><img src="${p.imagen}" alt=""></div>`
+    : `<div class="prod-img">📦</div>`;
+
+  const estadoClass = {Nuevo:'estado-nuevo',Usado:'estado-usado','Open Box':'estado-openbox'}[p.estado]||'estado-nuevo';
+
+  const editorHTML = puedeEditar ? `
+    <div class="stock-editor">
+      <div class="stock-editor-title">✏️ Actualizar Stock</div>
+      <div class="stock-row">
+        <button class="qty-btn" onclick="ajustarQty('${p.id}', -1)">−</button>
+        <input type="number" class="qty-input" id="qty_${p.id}" value="${cantidad}" min="0">
+        <button class="qty-btn" onclick="ajustarQty('${p.id}', 1)">+</button>
+        <button class="save-stock-btn" onclick="guardarStock('${p.id}', '${p.sku}', '${p.producto.replace(/'/g,"\\'")}')">💾 Guardar</button>
+      </div>
+    </div>` : '';
+
+  document.getElementById(containerId).innerHTML = `
+    <div class="prod-card">
+      <div class="prod-header">
+        ${imgHTML}
+        <div class="prod-info">
+          <div class="prod-nombre">${p.producto}</div>
+          <div class="prod-sku">SKU: ${p.sku}</div>
+          <span class="prod-estado ${estadoClass}">${p.estado}</span>
+        </div>
+      </div>
+      <div class="data-grid">${dataHTML}</div>
+      ${editorHTML}
+    </div>`;
 }
 
-function renderResultado(p, contenedor) {
-  if(!p) {
-    contenedor.innerHTML = `
-      <div class="result-not-found">
-        <div class="icon">🔍</div>
-        <h3>Producto no encontrado</h3>
-        <p>No existe ningún producto con ese SKU en el sistema</p>
-      </div>`;
+// ── AJUSTAR CANTIDAD ──
+function ajustarQty(id, delta) {
+  const input = document.getElementById('qty_'+id);
+  if (!input) return;
+  const val = Math.max(0, (parseInt(input.value)||0) + delta);
+  input.value = val;
+}
+
+// ── GUARDAR STOCK ──
+async function guardarStock(id, sku, nombre) {
+  const input = document.getElementById('qty_'+id);
+  if (!input) return;
+  const nuevaCantidad = parseInt(input.value);
+  if (isNaN(nuevaCantidad) || nuevaCantidad < 0) { showToast('Cantidad inválida','error'); return; }
+
+  const btn = document.querySelector(`[onclick="guardarStock('${id}','${sku}','${nombre.replace(/'/g,"\\'")}')"]`);
+  if (btn) { btn.textContent = '...'; btn.disabled = true; }
+
+  try {
+    // Primero obtener cantidad anterior
+    const { data: prev } = await sb.from('productos').select('cantidad').eq('id', id).single();
+    const cantidadAnterior = prev?.cantidad ?? '?';
+
+    const { error } = await sb.rpc('update_stock', {
+      p_user:     currentUser.user,
+      p_prod_id:  id,
+      p_cantidad: nuevaCantidad
+    });
+    if (error) throw new Error(error.message);
+
+    // Registrar en historial de sesión
+    historialSesion.unshift({
+      nombre, sku,
+      de: cantidadAnterior,
+      a: nuevaCantidad,
+      usuario: currentUser.nombre,
+      hora: new Date().toLocaleTimeString('es-HN', {hour:'2-digit',minute:'2-digit'})
+    });
+
+    showToast(`✅ Stock actualizado: ${cantidadAnterior} → ${nuevaCantidad}`, 'success');
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.textContent = '💾 Guardar'; btn.disabled = false; }
+  }
+}
+
+// ── HISTORIAL ──
+function renderHistorial() {
+  const el = document.getElementById('historialList');
+  if (!historialSesion.length) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>Sin cambios en esta sesión</p></div>`;
     return;
   }
-  const c = calcProd(p);
-  const estadoClass = p.estado==='Nuevo'?'nuevo':p.estado==='Usado'?'usado':'openbox';
-  const stockColor = p.cantidad===0?'color:var(--red)':p.cantidad<=3?'color:var(--gold)':'color:var(--green)';
-
-  contenedor.innerHTML = `
-    <div class="result-card">
-      <div class="result-header">
-        <div class="result-sku">SKU: ${p.sku}</div>
-        <div class="result-name">${p.producto}</div>
-        <div class="result-badges">
-          <span class="rbadge rbadge-${estadoClass}">${p.estado}</span>
-          ${p.categoria ? `<span class="rbadge" style="background:rgba(61,106,255,.1);color:var(--accent)">${p.categoria}</span>` : ''}
-          <span class="rbadge" style="background:rgba(255,255,255,.05);color:var(--text2)">${c.bandaEfectiva}</span>
-        </div>
-      </div>
-      <div class="result-prices">
-        <div class="price-item">
-          <div class="price-label">Precio c/ISV</div>
-          <div class="price-value price-green">${fmtLPS(c.precioConISV)}</div>
-        </div>
-        <div class="price-item">
-          <div class="price-label">Precio Final c/Desc</div>
-          <div class="price-value price-teal">${fmtLPS(c.precioFinalDesc)}</div>
-        </div>
-      </div>
-      <div class="result-stock">
-        <div class="stock-item">
-          <div class="price-label">Descuento</div>
-          <div class="price-value price-gold">${c.descIngresadoPct > 0 ? c.descIngresadoPct.toFixed(1)+'%' : '—'}</div>
-        </div>
-        <div class="stock-item">
-          <div class="price-label">Stock</div>
-          <div class="price-value" style="${stockColor}">${p.cantidad} uds</div>
-        </div>
-      </div>
+  el.innerHTML = historialSesion.map(h => {
+    const diff = h.a - h.de;
+    const diffColor = diff > 0 ? 'val-green' : diff < 0 ? 'val-red' : 'val-gold';
+    const diffLabel = diff > 0 ? `+${diff}` : `${diff}`;
+    return `<div class="hist-item">
+      <div class="hist-prod">${h.nombre}</div>
+      <div class="hist-meta">SKU: ${h.sku} · ${h.usuario} · ${h.hora}</div>
+      <div class="hist-diff ${diffColor}">${h.de} → ${h.a} (${diffLabel})</div>
     </div>`;
-
-  // Agregar al historial
-  agregarHistorial(p, c);
+  }).join('');
 }
 
-// ===== HISTORIAL =====
-function agregarHistorial(p, c) {
-  const entry = { sku: p.sku, nombre: p.producto, precio: c.precioConISV, time: new Date().toLocaleTimeString('es-HN',{hour:'2-digit',minute:'2-digit'}), p };
-  historial = [entry, ...historial.filter(h=>h.sku!==p.sku)].slice(0,20);
-  renderHistorial();
-}
-function renderHistorial() {
-  const el = document.getElementById('histList');
-  if(!historial.length) { el.innerHTML=`<div class="empty-hist"><div class="icon">🕓</div><p>Sin búsquedas recientes</p></div>`; return; }
-  el.innerHTML = historial.map(h=>`
-    <div class="hist-card" onclick="verDesdeHistorial('${h.sku}')">
-      <div class="hist-card-sku">${h.sku}</div>
-      <div class="hist-card-name">${h.nombre}</div>
-      <div class="hist-card-price">${fmtLPS(h.precio)}</div>
-      <div class="hist-card-time">Consultado a las ${h.time}</div>
-    </div>`).join('');
-}
-function verDesdeHistorial(sku) {
-  switchTab('manual');
-  document.getElementById('manualSku').value = sku;
-  buscarManual();
+// ── TOAST ──
+function showToast(msg, tipo='info') {
+  const el = document.getElementById('toast');
+  const d = document.createElement('div');
+  d.className = `toast-msg toast-${tipo}`;
+  d.textContent = msg;
+  el.appendChild(d);
+  setTimeout(() => d.remove(), 3500);
 }
 
-// ===== BÚSQUEDA MANUAL =====
-function buscarManual() {
-  const sku = document.getElementById('manualSku').value.trim();
-  if(!sku) return;
-  const p = buscarPorSKU(sku);
-  renderResultado(p, document.getElementById('manualResult'));
-}
-
-// ===== SCANNER =====
-function toggleScanner() {
-  if(scannerActivo) detenerScanner();
-  else iniciarScanner();
-}
-
-function iniciarScanner() {
-  const btn = document.getElementById('btnScan');
-  const status = document.getElementById('scanStatus');
-  status.textContent = 'Iniciando cámara...';
-
-  Quagga.init({
-    inputStream: {
-      name: 'Live',
-      type: 'LiveStream',
-      target: document.getElementById('scannerView'),
-      constraints: { facingMode: 'environment', width: { min: 640 }, height: { min: 480 } }
-    },
-    decoder: { readers: ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','upc_reader','upc_e_reader'] },
-    locate: true
-  }, err => {
-    if(err) {
-      status.textContent = '❌ No se pudo acceder a la cámara';
-      showToast('Permite el acceso a la cámara', 'error');
-      return;
-    }
-    Quagga.start();
-    scannerActivo = true;
-    btn.className = 'btn-scan stop';
-    btn.innerHTML = '⏹️ Detener Cámara';
-    status.textContent = '📷 Apunta al código de barras...';
-  });
-
-  Quagga.onDetected(resultado => {
-    const sku = resultado.codeResult.code;
-    if(!sku) return;
-    detenerScanner();
-    status.textContent = `✅ Escaneado: ${sku}`;
-    document.getElementById('scanResult').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><p>Buscando producto...</p></div>';
-    setTimeout(() => {
-      const p = buscarPorSKU(sku);
-      renderResultado(p, document.getElementById('scanResult'));
-      if(p) showToast(`✅ ${p.producto.substring(0,30)}...`, 'info');
-    }, 300);
-  });
-}
-
-function detenerScanner() {
-  if(!scannerActivo) return;
-  Quagga.stop();
-  scannerActivo = false;
-  const btn = document.getElementById('btnScan');
-  btn.className = 'btn-scan start';
-  btn.innerHTML = '📷 Activar Cámara';
-  document.getElementById('scanStatus').textContent = 'Presiona el botón para activar la cámara';
-}
-
-// ===== TABS =====
-function switchTab(name) {
-  document.querySelectorAll('.app-tab').forEach((t,i)=>{
-    const names=['scanner','manual','historial'];
-    t.classList.toggle('active', names[i]===name);
-  });
-  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
-  document.getElementById('tab-'+name).classList.add('active');
-  if(name!=='scanner') detenerScanner();
-  if(name==='historial') renderHistorial();
-}
-
-// ===== TOAST =====
-function showToast(msg, type='info') {
-  const t = document.createElement('div');
-  t.className = `toast-msg toast-${type}`;
-  t.textContent = msg;
-  document.getElementById('toast').appendChild(t);
-  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 3000);
-}
-
-// ===== INIT =====
-window.addEventListener('DOMContentLoaded', () => {
-  renderHistorial();
+// ── ENTER EN LOGIN ──
+document.getElementById('loginPass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('loginUser').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('loginPass').focus();
 });
 </script>
 </body>
