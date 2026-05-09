@@ -516,7 +516,10 @@ function calcProd(p) {
   const descIngresadoPct = parseFloat(p.descuento||0) / 100;
   const precioFinalDesc = precioConISV * (1 - descIngresadoPct);
 
-  return { costoTotalLPS, margenFinal, precioConISV, precioFinalDesc };
+  const descMaxRow = (parametros.descMax||[]).find(b=>b.banda===bandaEfectiva) || {};
+  const descMax = descMaxRow[nivelKey] || descMaxRow.normal || 0;
+
+  return { costoTotalLPS, margenFinal, precioConISV, precioFinalDesc, descMax };
 }
 
 function fmtLPS(v) { return 'L ' + parseFloat(v||0).toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
