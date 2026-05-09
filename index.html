@@ -428,7 +428,20 @@ async function buscarProducto(sku, containerId) {
       return;
     }
 
-    renderProductoCard(data.producto, containerId);
+    const p = data.producto;
+    // Si está agotado, buscar órdenes en tránsito para mostrar fecha estimada
+    let ordenesTransito = [];
+    if ((parseInt(p.cantidad)||0) === 0) {
+      try {
+        const { data: ords } = await sb.from('ordenes_compra')
+          .select('cantidad_ordenada, fecha_estimada, estado')
+          .eq('producto_id', p.id)
+          .in('estado', ['pendiente', 'en_transito'])
+          .order('fecha_estimada', { ascending: true });
+        ordenesTransito = ords || [];
+      } catch(e2) {}
+    }
+    renderProductoCard(p, containerId, ordenesTransito);
   } catch(e) {
     container.innerHTML = `<div class="prod-card" style="text-align:center;padding:24px;color:var(--red)">❌ Error: ${e.message}</div>`;
   }
@@ -467,12 +480,31 @@ function fmtLPS(v) { return 'L ' + parseFloat(v||0).toLocaleString('es-HN',{mini
 function fmtPct(v) { return (parseFloat(v||0)*100).toFixed(1)+'%'; }
 
 // ── RENDER PRODUCTO ──
-function renderProductoCard(p, containerId) {
+function renderProductoCard(p, containerId, ordenesTransito=[]) {
   const c = calcProd(p);
   const esAdmin = ['admin','gerencia'].includes(currentUser?.rol);
   const puedeEditar = esAdmin || currentUser?.puede_editar_stock === true;
   const cantidad = parseInt(p.cantidad)||0;
   const cantColor = cantidad === 0 ? 'val-red' : cantidad <= (parseInt(p.min_stock)||0) ? 'val-gold' : 'val-green';
+  const descPct = parseFloat(p.descuento||0);
+
+  // Bloque 🚢 Camino — solo si está agotado y hay órdenes en tránsito
+  let caminoHTML = '';
+  if (cantidad === 0 && ordenesTransito.length > 0) {
+    const conFecha = ordenesTransito.filter(o => o.fecha_estimada);
+    const proxFecha = conFecha.length ? conFecha[0].fecha_estimada : null;
+    const totalUnidades = ordenesTransito.reduce((s,o)=>s+(parseInt(o.cantidad_ordenada)||0),0);
+    let fechaLabel = proxFecha
+      ? (([y,m,d]) => `${d}/${m}/${y}`)(proxFecha.split('-'))
+      : 'fecha por confirmar';
+    caminoHTML = `<div style="background:rgba(162,155,254,.1);border:1px solid rgba(162,155,254,.4);border-radius:10px;padding:12px 14px;margin-top:10px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:24px">🚢</span>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#a29bfe">Pedido en camino · ${totalUnidades} uds.</div>
+        <div style="font-size:13px;color:var(--text);margin-top:2px">Disponible aprox. <strong>${fechaLabel}</strong></div>
+      </div>
+    </div>`;
+  }
 
   // Campos según rol
   let dataHTML = `
@@ -481,21 +513,17 @@ function renderProductoCard(p, containerId) {
       <div class="data-value ${cantColor}">${cantidad} uds.</div>
     </div>
     <div class="data-item">
-      <div class="data-label">Precio Final c/Desc</div>
+      <div class="data-label">Precio Final</div>
       <div class="data-value val-teal">${fmtLPS(c.precioFinalDesc)}</div>
+    </div>
+    <div class="data-item">
+      <div class="data-label">Desc %</div>
+      <div class="data-value ${descPct>0?'val-gold':'val-blue'}">${descPct>0?descPct.toFixed(1)+'%':'Sin desc.'}</div>
     </div>
   `;
 
   if (esAdmin) {
     dataHTML += `
-      <div class="data-item">
-        <div class="data-label">Costo Total LPS</div>
-        <div class="data-value val-gold">${fmtLPS(c.costoTotalLPS)}</div>
-      </div>
-      <div class="data-item">
-        <div class="data-label">Margen Final %</div>
-        <div class="data-value val-blue">${fmtPct(c.margenFinal)}</div>
-      </div>
       <div class="data-item" style="grid-column:1/-1">
         <div class="data-label">Precio c/ISV (Col X)</div>
         <div class="data-value val-green">${fmtLPS(c.precioConISV)}</div>
@@ -531,6 +559,7 @@ function renderProductoCard(p, containerId) {
         </div>
       </div>
       <div class="data-grid">${dataHTML}</div>
+      ${caminoHTML}
       ${editorHTML}
     </div>`;
 }
