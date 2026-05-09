@@ -283,22 +283,18 @@ async function doLogin() {
   btn.innerHTML = '<div class="spinner"></div>';
   btn.disabled = true;
   try {
-    // Cargar usuarios
-    const { data: rows, error } = await sb.from('usuarios').select('*').eq('activo', true);
-    if (!error && rows && rows.length > 0) {
-      const found = rows.find(x => x.user === u && x.pass === p);
-      if (!found) { mostrarErr(true); return; }
-      // Solo admin, gerencia y ventas pueden usar el scanner
-      if (!['admin','gerencia','ventas','bodega'].includes(found.rol)) {
-        mostrarErr(true); return;
-      }
-      currentUser = found;
-      // Cargar parámetros
-      await cargarParametros();
-      iniciarApp();
-    } else {
-      mostrarErr(true);
-    }
+    // Login seguro via RPC (mismo método que sistema principal)
+    const { data: rows, error } = await sb.rpc('login_usuario', { p_user: u, p_pass: p });
+    if (error || !rows || rows.length === 0) { mostrarErr(true); return; }
+    const r = rows[0];
+    // Solo admin, gerencia, ventas y bodega pueden usar el scanner
+    if (!['admin','gerencia','ventas','bodega'].includes(r.rol)) { mostrarErr(true); return; }
+    currentUser = { id: r.id, nombre: r.nombre, user: r.user, rol: r.rol };
+    // Establecer contexto RLS para que los RPCs funcionen
+    await sb.rpc('set_app_user', { p_user: currentUser.user });
+    // Cargar parámetros
+    await cargarParametros();
+    iniciarApp();
   } catch(e) {
     mostrarErr(true);
   } finally {
