@@ -149,6 +149,29 @@ body{display:flex;flex-direction:column}
 .toast-info{background:rgba(61,106,255,.15);border:1px solid rgba(61,106,255,.4);color:var(--accent)}
 .toast-warn{background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.4);color:var(--gold)}
 
+/* ── CALCULADORA DE DESCUENTOS ── */
+.calc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:flex-end}
+.calc-overlay.open{display:flex}
+.calc-sheet{background:var(--bg2);border-radius:20px 20px 0 0;width:100%;max-height:80vh;overflow-y:auto;padding:20px 16px 32px}
+.calc-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 18px}
+.calc-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.calc-prod-nombre{font-size:14px;font-weight:700;flex:1;margin-right:12px;line-height:1.3}
+.calc-close{background:var(--bg3);border:none;color:var(--text2);font-size:18px;width:32px;height:32px;border-radius:50%;cursor:pointer;flex-shrink:0}
+.calc-precio-base{display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:10px 14px;margin-bottom:14px}
+.calc-precio-base .lbl{font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.calc-table{width:100%;border-collapse:collapse;font-size:13px}
+.calc-table th{background:var(--bg3);color:var(--text2);font-size:10px;font-weight:700;text-transform:uppercase;padding:9px 12px;text-align:left;border-bottom:1px solid var(--border)}
+.calc-table th:not(:first-child){text-align:right}
+.calc-table td{padding:9px 12px;border-bottom:1px solid var(--border)}
+.calc-table td:not(:first-child){text-align:right}
+.calc-table tr:last-child td{border-bottom:none}
+.calc-row-max{background:rgba(255,71,87,.06)!important;border-left:3px solid var(--red)!important}
+.calc-badge{display:inline-flex;align-items:center;justify-content:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;min-width:46px}
+.cb-max{background:rgba(255,71,87,.15);color:var(--red)}
+.cb-mid{background:rgba(245,200,66,.12);color:var(--gold)}
+.cb-low{background:rgba(0,200,160,.1);color:var(--accent3)}
+.cb-zero{background:var(--bg3);color:var(--text3)}
+
 /* ── SPINNER ── */
 .spinner{width:22px;height:22px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -247,6 +270,25 @@ body{display:flex;flex-direction:column}
 
 <div id="toast"></div>
 
+<!-- CALCULADORA DE DESCUENTOS -->
+<div class="calc-overlay" id="calcOverlay" onclick="if(event.target===this)cerrarCalcDesc()">
+  <div class="calc-sheet">
+    <div class="calc-handle"></div>
+    <div class="calc-header">
+      <div class="calc-prod-nombre" id="calcProdNombre">—</div>
+      <button class="calc-close" onclick="cerrarCalcDesc()">✕</button>
+    </div>
+    <div class="calc-precio-base">
+      <div><div class="lbl">Precio Final</div><div style="font-size:18px;font-weight:800;color:var(--accent3)" id="calcPrecioBase">—</div></div>
+      <div style="text-align:right"><div class="lbl">Desc. MÁX.</div><div style="font-size:18px;font-weight:800;color:var(--red)" id="calcDescMax">—</div></div>
+    </div>
+    <table class="calc-table">
+      <thead><tr><th>Descuento %</th><th>Precio Final</th><th>Ahorro</th></tr></thead>
+      <tbody id="calcTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
 <script>
 // ── SUPABASE ──
 const SUPABASE_URL = 'https://uzhjnedhmbvgfqqssuov.supabase.co';
@@ -273,6 +315,7 @@ let parametros = {
 };
 let historialSesion = [];
 let scannerCtrl = null;
+let _calcProd = null;
 
 // ── LOGIN ──
 async function doLogin() {
@@ -481,6 +524,7 @@ function fmtPct(v) { return (parseFloat(v||0)*100).toFixed(1)+'%'; }
 
 // ── RENDER PRODUCTO ──
 function renderProductoCard(p, containerId, ordenesTransito=[]) {
+  _calcProd = p;
   const c = calcProd(p);
   const esAdmin = ['admin','gerencia'].includes(currentUser?.rol);
   const puedeEditar = esAdmin || currentUser?.puede_editar_stock === true;
@@ -547,6 +591,10 @@ function renderProductoCard(p, containerId, ordenesTransito=[]) {
         <button class="save-stock-btn" onclick="guardarStock('${p.id}', '${p.sku}', '${p.producto.replace(/'/g,"\\'")}')">💾 Guardar</button>
       </div>
     </div>
+    <button onclick="abrirCalcDesc()"
+      style="width:100%;margin-top:10px;padding:13px;background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.4);border-radius:10px;color:var(--gold);font-size:14px;font-weight:700;cursor:pointer">
+      💰 Calculadora de Descuentos
+    </button>
     <button id="wixBtn_${p.id}" onclick="actualizarStockWix('${p.sku}','${p.id}')"
       style="width:100%;margin-top:10px;padding:13px;background:linear-gradient(135deg,#00c8a0,#00a080);border:none;border-radius:10px;color:#000;font-size:14px;font-weight:700;cursor:pointer">
       🔄 Actualizar stock en Wix
@@ -614,6 +662,36 @@ async function guardarStock(id, sku, nombre) {
   } finally {
     if (btn) { btn.textContent = '💾 Guardar'; btn.disabled = false; }
   }
+}
+
+// ── CALCULADORA DE DESCUENTOS ──
+function abrirCalcDesc() {
+  const p = _calcProd;
+  if (!p) return;
+  const c = calcProd(p);
+  const descMaxPct = c.descMax;
+  const descMaxInt = Math.round(descMaxPct * 100);
+  document.getElementById('calcProdNombre').textContent = p.producto;
+  document.getElementById('calcPrecioBase').textContent = fmtLPS(c.precioFinalDesc);
+  document.getElementById('calcDescMax').textContent = (descMaxInt) + '%';
+  let rows = '';
+  for (let d = descMaxInt; d >= 0; d--) {
+    const fraccion  = d / 100;
+    const precioFin = c.precioFinalDesc * (1 - fraccion);
+    const ahorro    = c.precioFinalDesc - precioFin;
+    const esMax     = d === descMaxInt;
+    const cls = d === 0 ? 'cb-zero' : esMax ? 'cb-max' : d >= descMaxInt * 0.6 ? 'cb-mid' : 'cb-low';
+    rows += `<tr class="${esMax ? 'calc-row-max' : ''}">
+      <td><span class="calc-badge ${cls}">${d}%</span>${esMax ? ' ← MÁX' : ''}</td>
+      <td>${fmtLPS(precioFin)}</td>
+      <td>${ahorro > 0 ? fmtLPS(ahorro) : '—'}</td>
+    </tr>`;
+  }
+  document.getElementById('calcTableBody').innerHTML = rows;
+  document.getElementById('calcOverlay').classList.add('open');
+}
+function cerrarCalcDesc() {
+  document.getElementById('calcOverlay').classList.remove('open');
 }
 
 // ── ACTUALIZAR STOCK EN WIX ──
