@@ -182,16 +182,16 @@ select.estante-select{width:100%;padding:13px 15px;background:var(--bg3);border:
         <div class="step-head">
           <div class="step-num">2</div>
           <div><div class="step-title">Escaneá el producto</div>
-            <div class="step-sub">Código de barras o SKU manual</div></div>
+            <div class="step-sub">Con la pistola se asigna solo al estante activo</div></div>
         </div>
         <div id="productoIdle">
-          <button class="btn btn-primary" onclick="startScanner('producto')">📷 Escanear código del producto</button>
-          <div class="or">— o —</div>
           <div class="field" style="margin:0">
-            <input type="text" id="manualSku" placeholder="Escribir SKU…" autocapitalize="none"
-              onkeydown="if(event.key==='Enter') buscarProductoManual()">
+            <input type="text" id="manualSku" placeholder="Escaneá o escribí el SKU…" autocapitalize="none" autocomplete="off"
+              onkeydown="if(event.key==='Enter') asignarPorSkuManual()">
           </div>
-          <button class="btn btn-ghost" style="margin-top:10px" onclick="buscarProductoManual()">🔍 Buscar SKU</button>
+          <button class="btn btn-success" style="margin-top:10px" onclick="asignarPorSkuManual()">➕ Asignar al estante</button>
+          <div class="or">— o cámara del teléfono —</div>
+          <button class="btn btn-ghost" onclick="startScanner('producto')">📷 Escanear con cámara</button>
         </div>
         <div id="productoResult"></div>
       </div>
@@ -272,7 +272,6 @@ const CODE_RE = /^(LOCAL1|LOCAL2|BODEGA1|BODEGA2|PASILLO)-\d{2}$/;
 // ── ESTADO ──
 let currentUser = null;
 let estanteActivo = null;      // {codigo, zona, capacidad, ocupacion}
-let productoSel = null;        // producto pendiente de asignar
 let scannerCtrl = null;
 let scanModo = null;           // 'estante' | 'producto' | 'buscar'
 let sesion = [];               // asignados en esta sesión
@@ -347,10 +346,10 @@ async function seleccionarEstante(codigo){
     // fallback sin datos de ocupación
     estanteActivo = { codigo, zona:'', capacidad:null, ocupacion:null };
   }
-  productoSel = null;
   document.getElementById('productoResult').innerHTML = '';
   renderEstanteActivo();
   habilitarPaso2(true);
+  focusSku();   // listo para escanear productos de inmediato
 }
 function renderEstanteActivo(){
   const e = estanteActivo;
@@ -372,7 +371,7 @@ function renderEstanteActivo(){
     <button class="btn btn-ghost" style="margin-top:10px" onclick="cambiarEstante()">↺ Cambiar estante</button>`;
 }
 function cambiarEstante(){
-  estanteActivo=null; productoSel=null;
+  estanteActivo=null;
   document.getElementById('estanteActivoBox').style.display='none';
   document.getElementById('estanteIdle').style.display='block';
   document.getElementById('estanteSelect').value='';
@@ -383,82 +382,79 @@ function habilitarPaso2(on){
   document.getElementById('stepProducto').classList.toggle('disabled', !on);
 }
 
-// ── PASO 2: producto ──
-function buscarProductoManual(){
-  const sku = document.getElementById('manualSku').value.trim();
-  if(!sku){ showToast('Ingresá un SKU','warn'); return; }
-  buscarProducto(sku);
-}
-async function buscarProducto(sku){
-  if(!estanteActivo){ showToast('Primero elegí un estante','warn'); return; }
-  const cont = document.getElementById('productoResult');
-  const skuLimpio = sku.trim().replace(/[\r\n\t]/g,'');
-  cont.innerHTML = `<div class="prod-card" style="text-align:center"><div class="spinner"></div></div>`;
-  try{
-    const { data, error } = await sb.rpc('buscar_producto_sku', { p_user:currentUser.user, p_sku:skuLimpio });
-    if(error) throw new Error(error.message);
-    if(!data || !data.found || !data.producto){
-      cont.innerHTML = `<div class="prod-card" style="text-align:center">
-        <div style="font-size:30px">🔍</div>
-        <div style="font-weight:700;margin-top:6px">Producto no encontrado</div>
-        <div class="prod-sku">SKU: ${skuLimpio}</div></div>`;
-      return;
-    }
-    productoSel = data.producto;
-    // ¿ya tiene ubicación?
-    let yaEn = '';
-    try{
-      const { data: loc } = await sb.rpc('ubicacion_de_producto', { p_user:currentUser.user, p_sku:skuLimpio });
-      if(loc && loc.tiene_ubicacion && loc.ubicacion){
-        yaEn = `<span class="tag ya">Ya está en ${loc.ubicacion.codigo}</span>`;
-      }
-    }catch(e){}
-    cont.innerHTML = `<div class="prod-card">
-      <div class="prod-nombre">${productoSel.producto}</div>
-      <div class="prod-sku">SKU: ${productoSel.sku}</div>
-      ${yaEn}
-      <button class="btn btn-success" style="margin-top:12px" onclick="confirmarAsignar()">
-        ✓ Asignar a ${estanteActivo.codigo}</button>
-    </div>`;
-  }catch(e){
-    cont.innerHTML = `<div class="prod-card" style="text-align:center;color:var(--red)">❌ ${e.message}</div>`;
-  }
+// ── PASO 2: producto (auto-asignación por escáner) ──
+let _asignando = false;
+
+// reenfoca el campo SKU y lo limpia → listo para la próxima lectura de la pistola
+function focusSku(){
+  const el = document.getElementById('manualSku');
+  if(!el) return;
+  el.value = '';
+  setTimeout(()=>{ try{ el.focus(); el.select(); }catch(e){} }, 60);
 }
 
-async function confirmarAsignar(){
-  if(!productoSel || !estanteActivo) return;
+function asignarPorSkuManual(){
+  const sku = document.getElementById('manualSku').value.trim();
+  if(!sku){ showToast('Escaneá o ingresá un SKU','warn'); return; }
+  asignarPorSku(sku);
+}
+
+// Una sola llamada: busca por SKU + asigna al estante activo. Maneja "repetido".
+async function asignarPorSku(sku){
+  if(!estanteActivo){ showToast('Primero elegí un estante','warn'); return; }
+  const skuLimpio = (sku||'').trim().replace(/[\r\n\t]/g,'');
+  if(!skuLimpio) return;
+  if(_asignando) return;            // evita doble disparo de la pistola
+  _asignando = true;
   const cont = document.getElementById('productoResult');
   cont.innerHTML = `<div class="prod-card" style="text-align:center"><div class="spinner"></div></div>`;
   try{
-    const { data, error } = await sb.rpc('asignar_producto_ubicacion', {
-      p_user: currentUser.user,
-      p_producto_id: productoSel.id,
-      p_ubicacion_codigo: estanteActivo.codigo
+    const { data, error } = await sb.rpc('asignar_producto_por_sku', {
+      p_user: currentUser.user, p_sku: skuLimpio, p_ubicacion_codigo: estanteActivo.codigo
     });
     if(error) throw new Error(error.message);
-    if(data.error) throw new Error(data.error);
 
-    // actualizar ocupación local
-    if(typeof data.ocupacion==='number'){ estanteActivo.ocupacion = data.ocupacion; estanteActivo.capacidad = data.capacidad; }
-    renderEstanteActivo();
-
-    const movido = data.ubicacion_anterior ? ` (movido de ${data.ubicacion_anterior})` : '';
-    showToast(`✅ ${productoSel.sku} → ${estanteActivo.codigo}${movido}`, 'success');
-
-    // registrar en sesión
-    sesion.unshift({ codigo:estanteActivo.codigo, sku:productoSel.sku, nombre:productoSel.producto });
-    renderSesion();
-
-    // listo para el siguiente producto en el MISMO estante (modo lote)
-    productoSel = null;
-    cont.innerHTML = '';
-    document.getElementById('manualSku').value = '';
-    if(estanteActivo.capacidad!=null && estanteActivo.ocupacion>=estanteActivo.capacidad){
-      showToast('⚠️ Estante '+estanteActivo.codigo+' está lleno','warn');
+    // no encontrado
+    if(!data.found){
+      cont.innerHTML = `<div class="prod-card" style="text-align:center;border-color:var(--red)">
+        <div style="font-size:28px">🚫</div>
+        <div style="font-weight:700;margin-top:6px">No encontrado</div>
+        <div class="prod-sku">SKU: ${skuLimpio}</div></div>`;
+      showToast('🚫 SKU no encontrado: '+skuLimpio, 'error');
+      focusSku(); return;
     }
+
+    // actualizar ocupación del estante activo
+    if(typeof data.ocupacion==='number'){
+      estanteActivo.ocupacion = data.ocupacion; estanteActivo.capacidad = data.capacidad;
+      renderEstanteActivo();
+    }
+
+    // repetido (ya estaba en este estante)
+    if(data.ya_ingresado){
+      cont.innerHTML = `<div class="prod-card" style="border-color:var(--gold)">
+        <div class="tag ya">⚠️ Ya estaba en ${data.ubicacion}</div>
+        <div class="prod-nombre" style="margin-top:6px">${data.producto}</div>
+        <div class="prod-sku">SKU: ${data.sku}</div></div>`;
+      showToast('⚠️ Repetido: ya ingresado en '+data.ubicacion, 'warn');
+      focusSku(); return;
+    }
+
+    // asignado OK
+    const movido = data.ubicacion_anterior ? ` (movido de ${data.ubicacion_anterior})` : '';
+    cont.innerHTML = `<div class="prod-card" style="border-color:var(--accent3)">
+      <div class="tag" style="background:rgba(46,213,115,.15);color:var(--green)">✓ Asignado a ${data.ubicacion}</div>
+      <div class="prod-nombre" style="margin-top:6px">${data.producto}</div>
+      <div class="prod-sku">SKU: ${data.sku}</div></div>`;
+    showToast(`✅ ${(data.producto||'').slice(0,28)} → ${data.ubicacion}${movido}`, 'success');
+    sesion.unshift({ codigo:data.ubicacion, sku:data.sku, nombre:data.producto });
+    renderSesion();
+    focusSku();
   }catch(e){
     cont.innerHTML = `<div class="prod-card" style="text-align:center;color:var(--red)">❌ ${e.message}</div>`;
-  }
+    showToast('❌ '+e.message, 'error');
+    focusSku();
+  }finally{ _asignando = false; }
 }
 
 function renderSesion(){
@@ -569,7 +565,7 @@ function onScan(txt){
   if(scanModo==='producto'){
     // auto-ruteo: si por error se escanea un QR de estante, cambiar de estante
     if(CODE_RE.test(up)){ stopScanner(); seleccionarEstante(up); showToast('Estante: '+up,'info'); return; }
-    stopScanner(); buscarProducto(txt); return;
+    stopScanner(); asignarPorSku(txt); return;
   }
   if(scanModo==='buscar'){ stopScanner(); document.getElementById('buscarSku').value=txt; ejecutarBuscarUbicacion(txt); return; }
 }
