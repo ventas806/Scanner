@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>QR Ubicaciones · Focus Store</title>
-<!-- Librería QR (genera canvas/img, ideal para imprimir) -->
+<!-- Librería QR + Supabase (lee los códigos reales de la base) -->
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --bg:#0a0c10; --panel:#141720; --border:#2a3145;
@@ -14,7 +15,6 @@
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);padding:20px}
 
-  /* ── Barra de control (no se imprime) ── */
   .toolbar{max-width:1000px;margin:0 auto 24px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px 24px}
   .toolbar h1{font-size:20px;margin-bottom:6px}
   .toolbar p{font-size:13px;color:var(--text2);line-height:1.6}
@@ -25,25 +25,25 @@
   .total-badge{display:inline-block;background:rgba(61,106,255,.15);border:1px solid var(--accent);color:var(--accent);
     font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;margin-left:8px}
 
-  /* ── Zonas ── */
   .zona{max-width:1000px;margin:0 auto 28px}
   .zona-titulo{font-size:15px;font-weight:700;padding:8px 14px;border-radius:8px;margin-bottom:14px;
     display:flex;align-items:center;gap:8px}
   .zona-color{width:12px;height:12px;border-radius:50%}
 
-  /* ── Grilla de etiquetas ── */
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px}
   .label{
     background:#fff;color:#000;border:1.5px dashed #999;border-radius:8px;
-    padding:12px 10px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;
+    padding:12px 10px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:7px;
     page-break-inside:avoid;break-inside:avoid;
   }
   .label .qr{display:flex;align-items:center;justify-content:center}
   .label .qr img,.label .qr canvas{display:block}
-  .label .codigo{font-family:'Consolas',monospace;font-size:16px;font-weight:800;letter-spacing:.5px}
-  .label .zona-nombre{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#555}
+  .label .codigo{font-family:'Consolas',monospace;font-size:15px;font-weight:800;letter-spacing:.3px}
+  .label .meta{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#555;line-height:1.3}
+  .label .nivel-tag{display:inline-block;background:#eee;border-radius:6px;padding:1px 8px;font-size:11px;font-weight:800;color:#222;margin-top:2px}
 
-  /* ── Estilos de impresión ── */
+  #estado{max-width:1000px;margin:0 auto;text-align:center;color:var(--text2);padding:30px;font-size:14px}
+
   @media print{
     body{background:#fff;color:#000;padding:0}
     .toolbar{display:none}
@@ -57,69 +57,89 @@
 <body>
 
 <div class="toolbar">
-  <h1>🏷️ Generador de QR · Ubicaciones de Inventario <span class="total-badge" id="totalBadge">37 etiquetas</span></h1>
+  <h1>🏷️ Generador de QR · Ubicaciones de Inventario <span class="total-badge" id="totalBadge">…</span></h1>
   <p>
-    Cada QR codifica el código de la ubicación tal cual (ej. <strong>A-01-B-01</strong>), listo para escanear con el
-    Focus Scanner. Las etiquetas están agrupadas por zona y con guías de corte punteadas.
-    <br><strong>Para imprimir/guardar PDF:</strong> presioná el botón o <kbd>Ctrl</kbd>+<kbd>P</kbd> →
-    destino "Guardar como PDF". Recomendado: tamaño Carta, márgenes predeterminados.
+    Carga los códigos <strong>directo de la base de datos</strong>, así siempre están al día
+    (cuando agregás niveles, aparecen solos). Cada QR codifica el código exacto (ej.
+    <strong>BODEGA1-01-N2</strong> = Bodega 1, Estante 1, Nivel 2).
+    <br><strong>Para imprimir/guardar PDF:</strong> botón o <kbd>Ctrl</kbd>+<kbd>P</kbd> →
+    "Guardar como PDF". Cortá por las líneas punteadas y pegá cada etiqueta en su nivel.
   </p>
   <div class="acciones">
     <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+    <button class="btn btn-ghost" onclick="cargar()">🔄 Recargar códigos</button>
     <button class="btn btn-ghost" onclick="toggleZonaColor()">🎨 Color de zona: <span id="colorState">ON</span></button>
   </div>
 </div>
 
+<div id="estado">Cargando códigos…</div>
 <div id="contenedor"></div>
 
 <script>
-// ── 37 ubicaciones, agrupadas por zona ──
-// FUENTE DE VERDAD: tabla `ubicaciones_inventario` en Supabase (uzhjnedhmbvgfqqssuov).
-// El QR codifica el `codigo` exacto de la base para que el scanner/WhatsApp lo encuentre.
-// Color por zona alineado al plan de LEDs (Fase 2).
-const ZONAS = [
-  { nombre:'LOCAL 1',  color:'#ff4757', codigos:[
-      'LOCAL1-01','LOCAL1-02','LOCAL1-03','LOCAL1-04','LOCAL1-05','LOCAL1-06',
-      'LOCAL1-07','LOCAL1-08','LOCAL1-09','LOCAL1-10','LOCAL1-11' ] },
-  { nombre:'LOCAL 2',  color:'#3d6aff', codigos:[
-      'LOCAL2-01','LOCAL2-02','LOCAL2-03','LOCAL2-04','LOCAL2-05','LOCAL2-06',
-      'LOCAL2-07','LOCAL2-08','LOCAL2-09','LOCAL2-10','LOCAL2-11','LOCAL2-12' ] },
-  { nombre:'BODEGA 1', color:'#2ed573', codigos:[
-      'BODEGA1-01','BODEGA1-02','BODEGA1-03','BODEGA1-04','BODEGA1-05' ] },
-  { nombre:'BODEGA 2', color:'#f5c842', codigos:[
-      'BODEGA2-01','BODEGA2-02','BODEGA2-03','BODEGA2-04' ] },
-  { nombre:'PASILLO',  color:'#a29bfe', codigos:[
-      'PASILLO-01','PASILLO-02','PASILLO-03','PASILLO-04','PASILLO-05' ] },
-];
+const SUPABASE_URL = 'https://uzhjnedhmbvgfqqssuov.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6aGpuZWRobWJ2Z2ZxcXNzdW92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMjA1MTgsImV4cCI6MjA5MDg5NjUxOH0.w8oomn73rEZWqKv4RA56uCrBwv1z4VYnks7fyhafqz8';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const QR_SIZE = 130; // px — legible y compacto para etiqueta
+// Color por zona (alineado al plan de LEDs)
+const COLORES = {
+  'LOCAL 1':'#ff4757', 'LOCAL 2':'#3d6aff', 'BODEGA 1':'#2ed573', 'BODEGA 2':'#f5c842', 'PASILLO':'#a29bfe'
+};
+const QR_SIZE = 130;
 let zonaColorOn = true;
+let _ubicaciones = [];
+
+async function cargar(){
+  document.getElementById('estado').style.display = 'block';
+  document.getElementById('estado').textContent = 'Cargando códigos…';
+  document.getElementById('contenedor').innerHTML = '';
+  try{
+    const { data, error } = await sb
+      .from('ubicaciones_inventario')
+      .select('codigo, zona, estante, nivel')
+      .order('zona').order('estante').order('nivel');
+    if(error) throw error;
+    _ubicaciones = data || [];
+    render();
+  }catch(e){
+    document.getElementById('estado').textContent = '❌ Error cargando códigos: ' + (e.message || e);
+  }
+}
 
 function render(){
   const cont = document.getElementById('contenedor');
   cont.innerHTML = '';
-  let total = 0;
+  if(!_ubicaciones.length){
+    document.getElementById('estado').textContent = 'No hay ubicaciones en la base.';
+    return;
+  }
+  document.getElementById('estado').style.display = 'none';
 
-  ZONAS.forEach(zona => {
-    total += zona.codigos.length;
+  // agrupar por zona
+  const porZona = {};
+  _ubicaciones.forEach(u => { (porZona[u.zona] = porZona[u.zona] || []).push(u); });
+
+  let total = 0;
+  Object.keys(porZona).forEach(zona => {
+    const items = porZona[zona];
+    total += items.length;
+    const color = COLORES[zona] || '#3d6aff';
 
     const zonaEl = document.createElement('div');
     zonaEl.className = 'zona';
-
     const titulo = document.createElement('div');
     titulo.className = 'zona-titulo';
-    titulo.style.background = zonaColorOn ? hexA(zona.color,.14) : 'var(--panel)';
-    titulo.innerHTML = `<span class="zona-color" style="background:${zona.color}"></span>
-      ${zona.nombre} <span style="color:var(--text2);font-weight:500">· ${zona.codigos.length} estantes</span>`;
+    titulo.style.background = zonaColorOn ? hexA(color,.14) : 'var(--panel)';
+    titulo.innerHTML = `<span class="zona-color" style="background:${color}"></span>
+      ${zona} <span style="color:var(--text2);font-weight:500">· ${items.length} etiquetas</span>`;
     zonaEl.appendChild(titulo);
 
     const grid = document.createElement('div');
     grid.className = 'grid';
 
-    zona.codigos.forEach(codigo => {
+    items.forEach(u => {
       const label = document.createElement('div');
       label.className = 'label';
-      if (zonaColorOn) label.style.borderColor = zona.color;
+      if(zonaColorOn) label.style.borderColor = color;
 
       const qrBox = document.createElement('div');
       qrBox.className = 'qr';
@@ -127,23 +147,16 @@ function render(){
 
       const cod = document.createElement('div');
       cod.className = 'codigo';
-      cod.textContent = codigo;
-
-      const zn = document.createElement('div');
-      zn.className = 'zona-nombre';
-      zn.textContent = zona.nombre;
-
+      cod.textContent = u.codigo;
       label.appendChild(cod);
-      label.appendChild(zn);
-      grid.appendChild(label);
 
-      // Generar QR (contenido = código de ubicación exacto)
-      new QRCode(qrBox, {
-        text: codigo,
-        width: QR_SIZE,
-        height: QR_SIZE,
-        correctLevel: QRCode.CorrectLevel.M
-      });
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.innerHTML = `${u.zona} · Est. ${u.estante}<br><span class="nivel-tag">NIVEL ${u.nivel}</span>`;
+      label.appendChild(meta);
+
+      grid.appendChild(label);
+      new QRCode(qrBox, { text:u.codigo, width:QR_SIZE, height:QR_SIZE, correctLevel:QRCode.CorrectLevel.M });
     });
 
     zonaEl.appendChild(grid);
@@ -158,14 +171,12 @@ function toggleZonaColor(){
   document.getElementById('colorState').textContent = zonaColorOn ? 'ON' : 'OFF';
   render();
 }
-
-// hex + alpha → rgba
 function hexA(hex, a){
   const n = parseInt(hex.slice(1),16);
   return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
 }
 
-render();
+cargar();
 </script>
 </body>
 </html>

@@ -259,15 +259,9 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ── 37 estantes (fuente: tabla ubicaciones_inventario) ──
-const ESTANTES = [
-  {zona:'LOCAL 1',  n:11, pref:'LOCAL1'},
-  {zona:'LOCAL 2',  n:12, pref:'LOCAL2'},
-  {zona:'BODEGA 1', n:5,  pref:'BODEGA1'},
-  {zona:'BODEGA 2', n:4,  pref:'BODEGA2'},
-  {zona:'PASILLO',  n:5,  pref:'PASILLO'},
-];
-const CODE_RE = /^(LOCAL1|LOCAL2|BODEGA1|BODEGA2|PASILLO)-\d{2}$/;
+// ── Ubicaciones (se cargan de la base al iniciar; incluyen nivel) ──
+let UBICACIONES = [];   // [{codigo, zona, estante, nivel}]
+const CODE_RE = /^(LOCAL1|LOCAL2|BODEGA1|BODEGA2|PASILLO)-\d{2}-N\d+$/;
 
 // ── ESTADO ──
 let currentUser = null;
@@ -300,7 +294,7 @@ function iniciarApp(){
   document.getElementById('loginScreen').classList.remove('active');
   document.getElementById('appScreen').classList.add('active');
   document.getElementById('topbarUser').textContent = currentUser.nombre + ' · ' + currentUser.rol;
-  llenarSelects();
+  cargarUbicaciones();
 }
 function doLogout(){
   if(scannerCtrl) stopScanner();
@@ -311,14 +305,20 @@ function doLogout(){
   mostrarErr(false);
 }
 
-// ── SELECTS de estantes ──
-function todosLosCodigos(){
-  const arr=[];
-  ESTANTES.forEach(z=>{ for(let i=1;i<=z.n;i++){ arr.push({codigo:`${z.pref}-${String(i).padStart(2,'0')}`, zona:z.zona}); } });
-  return arr;
+// ── SELECTS de estantes (cargados de la base, incluyen nivel) ──
+async function cargarUbicaciones(){
+  try{
+    const { data, error } = await sb.rpc('listar_ubicaciones', { p_user: currentUser.user });
+    if(error) throw new Error(error.message);
+    UBICACIONES = data || [];
+  }catch(e){
+    UBICACIONES = [];
+    showToast('No se pudieron cargar las ubicaciones','error');
+  }
+  llenarSelects();
 }
 function llenarSelects(){
-  const opts = todosLosCodigos().map(c=>`<option value="${c.codigo}">${c.codigo} · ${c.zona}</option>`).join('');
+  const opts = UBICACIONES.map(c=>`<option value="${c.codigo}">${c.codigo} · ${c.zona}</option>`).join('');
   document.getElementById('estanteSelect').innerHTML = '<option value="">Seleccionar estante…</option>'+opts;
   document.getElementById('estanteVerSelect').innerHTML = '<option value="">Seleccionar estante…</option>'+opts;
 }
