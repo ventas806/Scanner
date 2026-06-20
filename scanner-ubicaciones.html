@@ -371,7 +371,7 @@ function renderEstanteActivo(){
     <button class="btn btn-ghost" style="margin-top:10px" onclick="cambiarEstante()">↺ Cambiar estante</button>`;
 }
 function cambiarEstante(){
-  estanteActivo=null;
+  estanteActivo=null; _pendienteSku=null;
   document.getElementById('estanteActivoBox').style.display='none';
   document.getElementById('estanteIdle').style.display='block';
   document.getElementById('estanteSelect').value='';
@@ -384,6 +384,7 @@ function habilitarPaso2(on){
 
 // ── PASO 2: producto (auto-asignación por escáner) ──
 let _asignando = false;
+let _pendienteSku = null;   // SKU esperando confirmación de movimiento entre estantes
 
 // reenfoca el campo SKU y lo limpia → listo para la próxima lectura de la pistola
 function focusSku(){
@@ -399,29 +400,51 @@ function asignarPorSkuManual(){
   asignarPorSku(sku);
 }
 
-// Una sola llamada: busca por SKU + asigna al estante activo. Maneja "repetido".
-async function asignarPorSku(sku){
+// Una sola llamada: busca por SKU + asigna al estante activo.
+// Maneja "repetido" y pide confirmación si el producto ya está en OTRO estante.
+async function asignarPorSku(sku, confirmar){
+  confirmar = (confirmar === true);
   if(!estanteActivo){ showToast('Primero elegí un estante','warn'); return; }
   const skuLimpio = (sku||'').trim().replace(/[\r\n\t]/g,'');
   if(!skuLimpio) return;
   if(_asignando) return;            // evita doble disparo de la pistola
+  if(_pendienteSku && !confirmar){ showToast('Confirmá o cancelá el movimiento pendiente','warn'); return; }
   _asignando = true;
   const cont = document.getElementById('productoResult');
   cont.innerHTML = `<div class="prod-card" style="text-align:center"><div class="spinner"></div></div>`;
   try{
     const { data, error } = await sb.rpc('asignar_producto_por_sku', {
-      p_user: currentUser.user, p_sku: skuLimpio, p_ubicacion_codigo: estanteActivo.codigo
+      p_user: currentUser.user, p_sku: skuLimpio, p_ubicacion_codigo: estanteActivo.codigo, p_confirmar: confirmar
     });
     if(error) throw new Error(error.message);
 
     // no encontrado
     if(!data.found){
+      _pendienteSku = null;
       cont.innerHTML = `<div class="prod-card" style="text-align:center;border-color:var(--red)">
         <div style="font-size:28px">🚫</div>
         <div style="font-weight:700;margin-top:6px">No encontrado</div>
         <div class="prod-sku">SKU: ${skuLimpio}</div></div>`;
       showToast('🚫 SKU no encontrado: '+skuLimpio, 'error');
       focusSku(); return;
+    }
+
+    // ya está en OTRO estante → pedir confirmación (no mueve)
+    if(data.requiere_confirmacion){
+      _pendienteSku = data.sku;
+      cont.innerHTML = `<div class="prod-card" style="border-color:var(--gold)">
+        <div class="tag ya">⚠️ Ya está en ${data.ubicacion_actual}</div>
+        <div class="prod-nombre" style="margin-top:6px">${data.producto}</div>
+        <div class="prod-sku">SKU: ${data.sku}</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:10px">¿Moverlo a <b style="color:var(--accent3)">${data.ubicacion_destino}</b>?</div>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn btn-success" onclick="confirmarMover()">✓ Sí, mover</button>
+          <button class="btn btn-ghost" onclick="cancelarMover()">✕ No</button>
+        </div></div>`;
+      showToast('⚠️ '+data.sku+' ya está en '+data.ubicacion_actual, 'warn');
+      // quitar foco del campo: la decisión es con botón (evita movimientos accidentales por escaneo)
+      const _sk=document.getElementById('manualSku'); if(_sk){ _sk.value=''; _sk.blur(); }
+      return;
     }
 
     // actualizar ocupación del estante activo
@@ -432,6 +455,7 @@ async function asignarPorSku(sku){
 
     // repetido (ya estaba en este estante)
     if(data.ya_ingresado){
+      _pendienteSku = null;
       cont.innerHTML = `<div class="prod-card" style="border-color:var(--gold)">
         <div class="tag ya">⚠️ Ya estaba en ${data.ubicacion}</div>
         <div class="prod-nombre" style="margin-top:6px">${data.producto}</div>
@@ -440,7 +464,8 @@ async function asignarPorSku(sku){
       focusSku(); return;
     }
 
-    // asignado OK
+    // asignado / movido OK
+    _pendienteSku = null;
     const movido = data.ubicacion_anterior ? ` (movido de ${data.ubicacion_anterior})` : '';
     cont.innerHTML = `<div class="prod-card" style="border-color:var(--accent3)">
       <div class="tag" style="background:rgba(46,213,115,.15);color:var(--green)">✓ Asignado a ${data.ubicacion}</div>
@@ -451,10 +476,24 @@ async function asignarPorSku(sku){
     renderSesion();
     focusSku();
   }catch(e){
+    _pendienteSku = null;
     cont.innerHTML = `<div class="prod-card" style="text-align:center;color:var(--red)">❌ ${e.message}</div>`;
     showToast('❌ '+e.message, 'error');
     focusSku();
   }finally{ _asignando = false; }
+}
+
+// Confirmar / cancelar el movimiento de un producto que ya estaba en otro estante
+function confirmarMover(){
+  const s = _pendienteSku;
+  _pendienteSku = null;
+  if(s) asignarPorSku(s, true);
+}
+function cancelarMover(){
+  _pendienteSku = null;
+  document.getElementById('productoResult').innerHTML = '';
+  showToast('Movimiento cancelado', 'info');
+  focusSku();
 }
 
 function renderSesion(){
