@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Focus Ubicaciones">
+<meta name="theme-color" content="#0a0c10">
+<title>Focus Store · Ubicaciones</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0c10;--bg2:#111318;--bg3:#181c24;--bg4:#1e2330;
+  --border:#2a3145;--border2:#354060;
+  --accent:#3d6aff;--accent2:#6a3dff;--accent3:#00c8a0;--accent4:#ff6b35;
+  --gold:#f5c842;--red:#ff4757;--green:#2ed573;
+  --text:#e8ecf5;--text2:#8892aa;--text3:#5a6480;
+  --card:#141720;--card2:#1a1f2e;
+  --radius:14px;--radius2:10px;--font:'Segoe UI',system-ui,sans-serif;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font)}
+body{display:flex;flex-direction:column}
+
+.screen{display:none;flex-direction:column;height:100%}
+.screen.active{display:flex}
+
+/* LOGIN */
+#loginScreen{align-items:center;justify-content:center;padding:24px;
+  background:radial-gradient(ellipse at 30% 40%,rgba(61,106,255,.15) 0%,transparent 60%),var(--bg)}
+.login-box{width:100%;max-width:360px;background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:36px 28px}
+.login-logo{text-align:center;margin-bottom:28px}
+.logo-icon{width:60px;height:60px;background:linear-gradient(135deg,var(--accent),var(--accent3));border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px}
+.login-logo h1{font-size:20px;font-weight:700}
+.login-logo p{font-size:12px;color:var(--text2);margin-top:3px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px}
+.field input,.field select{width:100%;padding:13px 15px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius2);color:var(--text);font-size:15px;outline:none;transition:border .2s}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.btn-login{width:100%;padding:14px;background:linear-gradient(135deg,var(--accent),var(--accent3));border:none;border-radius:var(--radius2);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.login-err{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);color:var(--red);padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none;text-align:center}
+
+/* APP */
+#appScreen{background:var(--bg)}
+.topbar{height:56px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0}
+.topbar-logo{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--accent3));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.topbar-title{font-size:14px;font-weight:700;flex:1}
+.topbar-user{font-size:11px;color:var(--text2)}
+.btn-logout{padding:6px 12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:12px;cursor:pointer}
+
+.tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{flex:1;padding:12px 6px;text-align:center;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;border:none;background:transparent;border-bottom:2px solid transparent}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.content{flex:1;overflow-y:auto;padding:16px}
+.tab-pane{display:none;max-width:520px;margin:0 auto}
+.tab-pane.active{display:block}
+
+/* CARDS / STEPS */
+.step{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+.step.disabled{opacity:.45;pointer-events:none}
+.step-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.step-num{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step.disabled .step-num{background:var(--bg4)}
+.step-title{font-size:14px;font-weight:700}
+.step-sub{font-size:11px;color:var(--text2);margin-top:1px}
+
+.btn{padding:13px 18px;border:none;border-radius:var(--radius2);font-size:14px;font-weight:600;cursor:pointer;width:100%;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-success{background:var(--accent3);color:#000}
+.btn-ghost{background:var(--bg3);border:1px solid var(--border);color:var(--text2)}
+.btn-row{display:flex;gap:10px}
+.btn-row .btn{flex:1}
+.or{text-align:center;font-size:11px;color:var(--text3);margin:10px 0}
+
+select.estante-select{width:100%;padding:13px 15px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius2);color:var(--text);font-size:15px;outline:none}
+
+/* ESTANTE ACTIVO */
+.estante-activo{display:flex;align-items:center;gap:12px;background:rgba(0,200,160,.1);border:1px solid var(--accent3);border-radius:12px;padding:12px 14px}
+.estante-activo .ea-cod{font-family:monospace;font-size:20px;font-weight:800;color:var(--accent3)}
+.estante-activo .ea-meta{font-size:11px;color:var(--text2)}
+.ea-cap{margin-left:auto;text-align:right;font-size:11px;color:var(--text2)}
+.cap-bar{width:70px;height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;margin-top:4px}
+.cap-fill{height:100%;background:var(--accent3)}
+
+/* SCANNER */
+#qr-reader{background:#000 !important;border:none !important;border-radius:var(--radius);overflow:hidden}
+#qr-reader__scan_region img{display:none !important}
+#qr-reader__dashboard{display:none !important}
+#qr-reader video{border-radius:var(--radius);width:100% !important}
+.scanning-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(61,106,255,.15);border:1px solid var(--accent);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--accent);margin-bottom:10px}
+.scanning-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulse 1s ease infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.scan-hint{text-align:center;font-size:12px;color:var(--text2);margin-top:10px}
+
+/* PRODUCTO CARD */
+.prod-card{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:14px;margin-top:12px;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.prod-nombre{font-size:14px;font-weight:700;line-height:1.3}
+.prod-sku{font-size:12px;color:var(--text2);font-family:monospace;margin-top:3px}
+.prod-extra{font-size:12px;color:var(--text2);margin-top:6px}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--bg4);color:var(--text2);margin-top:6px}
+.tag.ya{background:rgba(245,200,66,.15);color:var(--gold)}
+
+/* LISTA SESION / CONTENIDO */
+.sess-item{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.sess-item .si-cod{font-family:monospace;font-size:12px;font-weight:800;color:var(--accent3);flex-shrink:0}
+.sess-item .si-name{font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty-state{text-align:center;padding:40px 16px;color:var(--text3)}
+.empty-state .icon{font-size:38px;margin-bottom:10px}
+
+/* TOAST */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:none;width:calc(100% - 32px);max-width:420px}
+.toast-msg{padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.5);margin-bottom:8px;animation:fadeIn .25s ease;text-align:center}
+.toast-success{background:rgba(46,213,115,.15);border:1px solid rgba(46,213,115,.4);color:var(--green)}
+.toast-error{background:rgba(255,71,87,.15);border:1px solid rgba(255,71,87,.4);color:var(--red)}
+.toast-info{background:rgba(61,106,255,.15);border:1px solid rgba(61,106,255,.4);color:var(--accent)}
+.toast-warn{background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.4);color:var(--gold)}
+
+.spinner{width:22px;height:22px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cap-warn{color:var(--gold);font-weight:700}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="screen active" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="logo-icon">📍</div>
+      <h1>Focus Ubicaciones</h1>
+      <p>Asignación de Estantes · Focus Store</p>
+    </div>
+    <div class="login-err" id="loginErr">Usuario o contraseña incorrectos</div>
+    <div class="field"><label>Usuario</label>
+      <input type="text" id="loginUser" placeholder="tu.usuario" autocomplete="username" autocapitalize="none"></div>
+    <div class="field"><label>Contraseña</label>
+      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="btn-login" id="btnLogin" onclick="doLogin()">Iniciar Sesión</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="screen" id="appScreen">
+  <div class="topbar">
+    <div class="topbar-logo">📍</div>
+    <div class="topbar-title">Focus Ubicaciones</div>
+    <div class="topbar-user" id="topbarUser"></div>
+    <button class="btn-logout" onclick="doLogout()">Salir</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" id="tabAsignar" onclick="showTab('asignar')">📦 Asignar</button>
+    <button class="tab" id="tabBuscar" onclick="showTab('buscar')">🔎 ¿Dónde está?</button>
+    <button class="tab" id="tabEstante" onclick="showTab('estante')">🗄️ Estante</button>
+  </div>
+  <div class="content">
+
+    <!-- ASIGNAR -->
+    <div class="tab-pane active" id="paneAsignar">
+      <!-- Paso 1: estante -->
+      <div class="step" id="stepEstante">
+        <div class="step-head">
+          <div class="step-num">1</div>
+          <div><div class="step-title">Elegí el estante</div>
+            <div class="step-sub">Escaneá el QR del estante o seleccionalo</div></div>
+        </div>
+        <div id="estanteIdle">
+          <button class="btn btn-primary" onclick="startScanner('estante')">📷 Escanear QR del estante</button>
+          <div class="or">— o —</div>
+          <select class="estante-select" id="estanteSelect" onchange="seleccionarEstante(this.value)">
+            <option value="">Seleccionar estante…</option>
+          </select>
+        </div>
+        <div id="estanteActivoBox" style="display:none"></div>
+      </div>
+
+      <!-- Paso 2: producto -->
+      <div class="step disabled" id="stepProducto">
+        <div class="step-head">
+          <div class="step-num">2</div>
+          <div><div class="step-title">Escaneá el producto</div>
+            <div class="step-sub">Código de barras o SKU manual</div></div>
+        </div>
+        <div id="productoIdle">
+          <button class="btn btn-primary" onclick="startScanner('producto')">📷 Escanear código del producto</button>
+          <div class="or">— o —</div>
+          <div class="field" style="margin:0">
+            <input type="text" id="manualSku" placeholder="Escribir SKU…" autocapitalize="none"
+              onkeydown="if(event.key==='Enter') buscarProductoManual()">
+          </div>
+          <button class="btn btn-ghost" style="margin-top:10px" onclick="buscarProductoManual()">🔍 Buscar SKU</button>
+        </div>
+        <div id="productoResult"></div>
+      </div>
+
+      <!-- Asignados en esta sesión -->
+      <div class="step" id="stepSesion" style="display:none">
+        <div class="step-head">
+          <div class="step-num" style="background:var(--accent3);color:#000">✓</div>
+          <div><div class="step-title">Asignados en esta sesión</div>
+            <div class="step-sub" id="sesionContador">0 productos</div></div>
+        </div>
+        <div id="sesionLista"></div>
+      </div>
+    </div>
+
+    <!-- BUSCAR (¿dónde está?) — base para WhatsApp -->
+    <div class="tab-pane" id="paneBuscar">
+      <div class="step">
+        <div class="step-head"><div class="step-num">🔎</div>
+          <div><div class="step-title">¿Dónde está un producto?</div>
+            <div class="step-sub">Escaneá o escribí el SKU</div></div></div>
+        <button class="btn btn-primary" onclick="startScanner('buscar')">📷 Escanear producto</button>
+        <div class="or">— o —</div>
+        <div class="field" style="margin:0">
+          <input type="text" id="buscarSku" placeholder="Escribir SKU…" autocapitalize="none"
+            onkeydown="if(event.key==='Enter') buscarUbicacion()">
+        </div>
+        <button class="btn btn-ghost" style="margin-top:10px" onclick="buscarUbicacion()">🔍 Buscar ubicación</button>
+        <div id="buscarResult"></div>
+      </div>
+    </div>
+
+    <!-- ESTANTE (contenido) -->
+    <div class="tab-pane" id="paneEstante">
+      <div class="step">
+        <div class="step-head"><div class="step-num">🗄️</div>
+          <div><div class="step-title">Contenido de un estante</div>
+            <div class="step-sub">Qué productos tiene asignados</div></div></div>
+        <select class="estante-select" id="estanteVerSelect" onchange="verEstante(this.value)">
+          <option value="">Seleccionar estante…</option>
+        </select>
+        <div id="estanteVerResult" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SCANNER OVERLAY (compartido) -->
+<div class="step" id="scannerOverlay" style="display:none;position:fixed;inset:0;z-index:300;background:var(--bg);margin:0;border-radius:0;border:none;padding:16px;overflow-y:auto">
+  <div style="max-width:520px;margin:0 auto">
+    <div class="scanning-badge"><span class="scanning-dot"></span> <span id="scanModoLabel">Escaneando…</span></div>
+    <div id="qr-reader"></div>
+    <p class="scan-hint" id="scanHint"></p>
+    <button class="btn btn-ghost" style="margin-top:14px" onclick="stopScanner()">✕ Cancelar</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── SUPABASE (mismo proyecto que Precio Inteligente) ──
+const SUPABASE_URL = 'https://uzhjnedhmbvgfqqssuov.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6aGpuZWRobWJ2Z2ZxcXNzdW92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMjA1MTgsImV4cCI6MjA5MDg5NjUxOH0.w8oomn73rEZWqKv4RA56uCrBwv1z4VYnks7fyhafqz8';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── 37 estantes (fuente: tabla ubicaciones_inventario) ──
+const ESTANTES = [
+  {zona:'LOCAL 1',  n:11, pref:'LOCAL1'},
+  {zona:'LOCAL 2',  n:12, pref:'LOCAL2'},
+  {zona:'BODEGA 1', n:5,  pref:'BODEGA1'},
+  {zona:'BODEGA 2', n:4,  pref:'BODEGA2'},
+  {zona:'PASILLO',  n:5,  pref:'PASILLO'},
+];
+const CODE_RE = /^(LOCAL1|LOCAL2|BODEGA1|BODEGA2|PASILLO)-\d{2}$/;
+
+// ── ESTADO ──
+let currentUser = null;
+let estanteActivo = null;      // {codigo, zona, capacidad, ocupacion}
+let productoSel = null;        // producto pendiente de asignar
+let scannerCtrl = null;
+let scanModo = null;           // 'estante' | 'producto' | 'buscar'
+let sesion = [];               // asignados en esta sesión
+
+// ── LOGIN (mismo método que sistema principal) ──
+async function doLogin(){
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  if(!u||!p){ mostrarErr(true); return; }
+  const btn = document.getElementById('btnLogin');
+  btn.innerHTML = '<div class="spinner"></div>'; btn.disabled = true;
+  try{
+    const { data: rows, error } = await sb.rpc('login_usuario', { p_user:u, p_pass:p });
+    if(error || !rows || rows.length===0){ mostrarErr(true); return; }
+    const r = rows[0];
+    if(!['admin','gerencia','ventas','bodega'].includes(r.rol)){ mostrarErr(true); return; }
+    currentUser = { id:r.id, nombre:r.nombre, user:r.user, rol:r.rol };
+    await sb.rpc('set_app_user', { p_user: currentUser.user });
+    iniciarApp();
+  }catch(e){ mostrarErr(true); }
+  finally{ btn.innerHTML='Iniciar Sesión'; btn.disabled=false; }
+}
+function mostrarErr(v){ document.getElementById('loginErr').style.display = v?'block':'none'; }
+
+function iniciarApp(){
+  document.getElementById('loginScreen').classList.remove('active');
+  document.getElementById('appScreen').classList.add('active');
+  document.getElementById('topbarUser').textContent = currentUser.nombre + ' · ' + currentUser.rol;
+  llenarSelects();
+}
+function doLogout(){
+  if(scannerCtrl) stopScanner();
+  currentUser=null; estanteActivo=null; productoSel=null; sesion=[];
+  document.getElementById('appScreen').classList.remove('active');
+  document.getElementById('loginScreen').classList.add('active');
+  document.getElementById('loginUser').value=''; document.getElementById('loginPass').value='';
+  mostrarErr(false);
+}
+
+// ── SELECTS de estantes ──
+function todosLosCodigos(){
+  const arr=[];
+  ESTANTES.forEach(z=>{ for(let i=1;i<=z.n;i++){ arr.push({codigo:`${z.pref}-${String(i).padStart(2,'0')}`, zona:z.zona}); } });
+  return arr;
+}
+function llenarSelects(){
+  const opts = todosLosCodigos().map(c=>`<option value="${c.codigo}">${c.codigo} · ${c.zona}</option>`).join('');
+  document.getElementById('estanteSelect').innerHTML = '<option value="">Seleccionar estante…</option>'+opts;
+  document.getElementById('estanteVerSelect').innerHTML = '<option value="">Seleccionar estante…</option>'+opts;
+}
+
+// ── TABS ──
+function showTab(name){
+  ['asignar','buscar','estante'].forEach(t=>{
+    const cap = t.charAt(0).toUpperCase()+t.slice(1);
+    document.getElementById('tab'+cap).classList.toggle('active', t===name);
+    document.getElementById('pane'+cap).classList.toggle('active', t===name);
+  });
+  if(scannerCtrl) stopScanner();
+}
+
+// ── PASO 1: elegir estante ──
+async function seleccionarEstante(codigo){
+  if(!codigo) return;
+  if(!CODE_RE.test(codigo)){ showToast('Código de estante no válido: '+codigo,'error'); return; }
+  try{
+    const { data, error } = await sb.rpc('productos_en_ubicacion', { p_user:currentUser.user, p_ubicacion_codigo:codigo });
+    if(error) throw new Error(error.message);
+    const u = data.ubicacion;
+    estanteActivo = { codigo:u.codigo, zona:u.zona, capacidad:u.capacidad, ocupacion:u.ocupacion };
+  }catch(e){
+    // fallback sin datos de ocupación
+    estanteActivo = { codigo, zona:'', capacidad:null, ocupacion:null };
+  }
+  productoSel = null;
+  document.getElementById('productoResult').innerHTML = '';
+  renderEstanteActivo();
+  habilitarPaso2(true);
+}
+function renderEstanteActivo(){
+  const e = estanteActivo;
+  document.getElementById('estanteIdle').style.display='none';
+  const box = document.getElementById('estanteActivoBox');
+  box.style.display='block';
+  let cap='';
+  if(e.capacidad!=null){
+    const pct = Math.min(100, Math.round((e.ocupacion/e.capacidad)*100));
+    const full = e.ocupacion>=e.capacidad;
+    cap = `<div class="ea-cap"><div>${e.ocupacion}/${e.capacidad}${full?' <span class="cap-warn">LLENO</span>':''}</div>
+      <div class="cap-bar"><div class="cap-fill" style="width:${pct}%;${full?'background:var(--gold)':''}"></div></div></div>`;
+  }
+  box.innerHTML = `<div class="estante-activo">
+      <div>📍</div>
+      <div><div class="ea-cod">${e.codigo}</div><div class="ea-meta">${e.zona||''}</div></div>
+      ${cap}
+    </div>
+    <button class="btn btn-ghost" style="margin-top:10px" onclick="cambiarEstante()">↺ Cambiar estante</button>`;
+}
+function cambiarEstante(){
+  estanteActivo=null; productoSel=null;
+  document.getElementById('estanteActivoBox').style.display='none';
+  document.getElementById('estanteIdle').style.display='block';
+  document.getElementById('estanteSelect').value='';
+  document.getElementById('productoResult').innerHTML='';
+  habilitarPaso2(false);
+}
+function habilitarPaso2(on){
+  document.getElementById('stepProducto').classList.toggle('disabled', !on);
+}
+
+// ── PASO 2: producto ──
+function buscarProductoManual(){
+  const sku = document.getElementById('manualSku').value.trim();
+  if(!sku){ showToast('Ingresá un SKU','warn'); return; }
+  buscarProducto(sku);
+}
+async function buscarProducto(sku){
+  if(!estanteActivo){ showToast('Primero elegí un estante','warn'); return; }
+  const cont = document.getElementById('productoResult');
+  const skuLimpio = sku.trim().replace(/[\r\n\t]/g,'');
+  cont.innerHTML = `<div class="prod-card" style="text-align:center"><div class="spinner"></div></div>`;
+  try{
+    const { data, error } = await sb.rpc('buscar_producto_sku', { p_user:currentUser.user, p_sku:skuLimpio });
+    if(error) throw new Error(error.message);
+    if(!data || !data.found || !data.producto){
+      cont.innerHTML = `<div class="prod-card" style="text-align:center">
+        <div style="font-size:30px">🔍</div>
+        <div style="font-weight:700;margin-top:6px">Producto no encontrado</div>
+        <div class="prod-sku">SKU: ${skuLimpio}</div></div>`;
+      return;
+    }
+    productoSel = data.producto;
+    // ¿ya tiene ubicación?
+    let yaEn = '';
+    try{
+      const { data: loc } = await sb.rpc('ubicacion_de_producto', { p_user:currentUser.user, p_sku:skuLimpio });
+      if(loc && loc.tiene_ubicacion && loc.ubicacion){
+        yaEn = `<span class="tag ya">Ya está en ${loc.ubicacion.codigo}</span>`;
+      }
+    }catch(e){}
+    cont.innerHTML = `<div class="prod-card">
+      <div class="prod-nombre">${productoSel.producto}</div>
+      <div class="prod-sku">SKU: ${productoSel.sku}</div>
+      ${yaEn}
+      <button class="btn btn-success" style="margin-top:12px" onclick="confirmarAsignar()">
+        ✓ Asignar a ${estanteActivo.codigo}</button>
+    </div>`;
+  }catch(e){
+    cont.innerHTML = `<div class="prod-card" style="text-align:center;color:var(--red)">❌ ${e.message}</div>`;
+  }
+}
+
+async function confirmarAsignar(){
+  if(!productoSel || !estanteActivo) return;
+  const cont = document.getElementById('productoResult');
+  cont.innerHTML = `<div class="prod-card" style="text-align:center"><div class="spinner"></div></div>`;
+  try{
+    const { data, error } = await sb.rpc('asignar_producto_ubicacion', {
+      p_user: currentUser.user,
+      p_producto_id: productoSel.id,
+      p_ubicacion_codigo: estanteActivo.codigo
+    });
+    if(error) throw new Error(error.message);
+    if(data.error) throw new Error(data.error);
+
+    // actualizar ocupación local
+    if(typeof data.ocupacion==='number'){ estanteActivo.ocupacion = data.ocupacion; estanteActivo.capacidad = data.capacidad; }
+    renderEstanteActivo();
+
+    const movido = data.ubicacion_anterior ? ` (movido de ${data.ubicacion_anterior})` : '';
+    showToast(`✅ ${productoSel.sku} → ${estanteActivo.codigo}${movido}`, 'success');
+
+    // registrar en sesión
+    sesion.unshift({ codigo:estanteActivo.codigo, sku:productoSel.sku, nombre:productoSel.producto });
+    renderSesion();
+
+    // listo para el siguiente producto en el MISMO estante (modo lote)
+    productoSel = null;
+    cont.innerHTML = '';
+    document.getElementById('manualSku').value = '';
+    if(estanteActivo.capacidad!=null && estanteActivo.ocupacion>=estanteActivo.capacidad){
+      showToast('⚠️ Estante '+estanteActivo.codigo+' está lleno','warn');
+    }
+  }catch(e){
+    cont.innerHTML = `<div class="prod-card" style="text-align:center;color:var(--red)">❌ ${e.message}</div>`;
+  }
+}
+
+function renderSesion(){
+  const step = document.getElementById('stepSesion');
+  if(!sesion.length){ step.style.display='none'; return; }
+  step.style.display='block';
+  document.getElementById('sesionContador').textContent = sesion.length+' producto'+(sesion.length>1?'s':'');
+  document.getElementById('sesionLista').innerHTML = sesion.map(s=>`
+    <div class="sess-item">
+      <span class="si-cod">${s.codigo}</span>
+      <span class="si-name">${s.nombre}</span>
+    </div>`).join('');
+}
+
+// ── ¿DÓNDE ESTÁ? (lookup reverso) ──
+function buscarUbicacion(){
+  const sku = document.getElementById('buscarSku').value.trim();
+  if(!sku){ showToast('Ingresá un SKU','warn'); return; }
+  ejecutarBuscarUbicacion(sku);
+}
+async function ejecutarBuscarUbicacion(sku){
+  const cont = document.getElementById('buscarResult');
+  const skuLimpio = sku.trim().replace(/[\r\n\t]/g,'');
+  cont.innerHTML = `<div class="prod-card" style="text-align:center"><div class="spinner"></div></div>`;
+  try{
+    const { data, error } = await sb.rpc('ubicacion_de_producto', { p_user:currentUser.user, p_sku:skuLimpio });
+    if(error) throw new Error(error.message);
+    if(!data.found){
+      cont.innerHTML = `<div class="prod-card" style="text-align:center">
+        <div style="font-size:30px">🔍</div><div style="font-weight:700;margin-top:6px">Producto no encontrado</div>
+        <div class="prod-sku">SKU: ${skuLimpio}</div></div>`;
+      return;
+    }
+    const p = data.producto;
+    if(!data.tiene_ubicacion){
+      cont.innerHTML = `<div class="prod-card">
+        <div class="prod-nombre">${p.nombre}</div><div class="prod-sku">SKU: ${p.sku}</div>
+        <div class="tag" style="background:rgba(255,71,87,.15);color:var(--red)">Sin ubicación asignada</div>
+        <div class="prod-extra">Stock: ${p.cantidad} uds.</div></div>`;
+      return;
+    }
+    const u = data.ubicacion;
+    cont.innerHTML = `<div class="prod-card">
+      <div class="prod-nombre">${p.nombre}</div><div class="prod-sku">SKU: ${p.sku}</div>
+      <div class="estante-activo" style="margin-top:12px">
+        <div>📍</div>
+        <div><div class="ea-cod">${u.codigo}</div><div class="ea-meta">${u.zona} · Estante ${u.estante}${u.descripcion?' · '+u.descripcion:''}</div></div>
+      </div>
+      <div class="prod-extra">Stock: ${p.cantidad} uds.</div></div>`;
+  }catch(e){
+    cont.innerHTML = `<div class="prod-card" style="text-align:center;color:var(--red)">❌ ${e.message}</div>`;
+  }
+}
+
+// ── CONTENIDO DE ESTANTE ──
+async function verEstante(codigo){
+  if(!codigo){ document.getElementById('estanteVerResult').innerHTML=''; return; }
+  const cont = document.getElementById('estanteVerResult');
+  cont.innerHTML = `<div class="prod-card" style="text-align:center"><div class="spinner"></div></div>`;
+  try{
+    const { data, error } = await sb.rpc('productos_en_ubicacion', { p_user:currentUser.user, p_ubicacion_codigo:codigo });
+    if(error) throw new Error(error.message);
+    const u = data.ubicacion; const prods = data.productos||[];
+    let lista = prods.length
+      ? prods.map(p=>`<div class="sess-item"><span class="si-name">${p.nombre}</span><span class="si-cod">${p.cantidad} u</span></div>`).join('')
+      : `<div class="empty-state"><div class="icon">📭</div><p>Estante vacío</p></div>`;
+    cont.innerHTML = `<div class="estante-activo" style="margin-bottom:12px">
+        <div>🗄️</div>
+        <div><div class="ea-cod">${u.codigo}</div><div class="ea-meta">${u.zona}${u.descripcion?' · '+u.descripcion:''}</div></div>
+        <div class="ea-cap"><div>${u.ocupacion}/${u.capacidad}</div></div>
+      </div>${lista}`;
+  }catch(e){
+    cont.innerHTML = `<div class="prod-card" style="text-align:center;color:var(--red)">❌ ${e.message}</div>`;
+  }
+}
+
+// ── SCANNER (compartido) ──
+async function startScanner(modo){
+  scanModo = modo;
+  if(modo==='producto' && !estanteActivo){ showToast('Primero elegí un estante','warn'); return; }
+  document.getElementById('scannerOverlay').style.display='block';
+  document.getElementById('scanModoLabel').textContent =
+    modo==='estante' ? 'Escaneá el QR del estante' : 'Escaneá el código del producto';
+  document.getElementById('scanHint').textContent =
+    modo==='estante' ? 'Apuntá al QR pegado en el estante' : 'Apuntá al código de barras del producto';
+
+  const formats = (modo==='estante')
+    ? [ Html5QrcodeSupportedFormats.QR_CODE ]
+    : [ Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.QR_CODE ];
+
+  try{
+    const h = new Html5Qrcode('qr-reader');
+    scannerCtrl = h;
+    await h.start({ facingMode:'environment' },
+      { fps:15, qrbox:{width:240,height:240}, aspectRatio:1.0, formatsToSupport:formats },
+      (txt)=>{ onScan(txt.trim()); },
+      ()=>{});
+  }catch(e){
+    stopScanner();
+    showToast('No se pudo abrir la cámara. Usá el ingreso manual.','error');
+  }
+}
+function onScan(txt){
+  const up = txt.toUpperCase();
+  if(scanModo==='estante'){ stopScanner(); seleccionarEstante(up); return; }
+  if(scanModo==='producto'){
+    // auto-ruteo: si por error se escanea un QR de estante, cambiar de estante
+    if(CODE_RE.test(up)){ stopScanner(); seleccionarEstante(up); showToast('Estante: '+up,'info'); return; }
+    stopScanner(); buscarProducto(txt); return;
+  }
+  if(scanModo==='buscar'){ stopScanner(); document.getElementById('buscarSku').value=txt; ejecutarBuscarUbicacion(txt); return; }
+}
+async function stopScanner(){
+  if(scannerCtrl){ try{ await scannerCtrl.stop(); scannerCtrl.clear(); }catch(e){} scannerCtrl=null; }
+  document.getElementById('scannerOverlay').style.display='none';
+}
+
+// ── TOAST ──
+function showToast(msg,tipo='info'){
+  const el=document.getElementById('toast');
+  const d=document.createElement('div');
+  d.className=`toast-msg toast-${tipo}`; d.textContent=msg;
+  el.appendChild(d); setTimeout(()=>d.remove(),3500);
+}
+
+// ── ENTER en login ──
+document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginPass').focus(); });
+</script>
+</body>
+</html>
