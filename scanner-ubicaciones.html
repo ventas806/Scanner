@@ -284,6 +284,23 @@ let scannerCtrl = null;
 let scanModo = null;           // 'estante' | 'producto' | 'buscar'
 let sesion = [];               // asignados en esta sesión
 
+// Parámetros de precio (mismos que Precio Inteligente; se cargan de la base al iniciar)
+let parametros = {
+  tipoCambio: 27, isvNuevo: 0.15, isvUsado: 0,
+  bandas: [
+    {banda:'Bajo',    excelente:.60, normal:.56, alto:.52, desde:0,      hasta:30},
+    {banda:'Medio',   excelente:.46, normal:.42, alto:.38, desde:30.01,  hasta:400},
+    {banda:'Alto',    excelente:.34, normal:.30, alto:.26, desde:400.01, hasta:1000},
+    {banda:'Premium', excelente:.22, normal:.18, alto:.14, desde:1001,   hasta:999999}
+  ],
+  descMax: [
+    {banda:'Bajo',excelente:.12,normal:.11,alto:.10},
+    {banda:'Medio',excelente:.09,normal:.08,alto:.07},
+    {banda:'Alto',excelente:.06,normal:.05,alto:.04},
+    {banda:'Premium',excelente:.03,normal:.02,alto:.01}
+  ]
+};
+
 // ── LOGIN (mismo método que sistema principal) ──
 async function doLogin(){
   const u = document.getElementById('loginUser').value.trim();
@@ -312,6 +329,7 @@ function iniciarApp(){
     document.getElementById('tabNiveles').style.display = '';
   }
   cargarUbicaciones();
+  cargarParametros();
 }
 function doLogout(){
   if(scannerCtrl) stopScanner();
@@ -395,6 +413,92 @@ async function adminQuitarNivel(base){
     document.getElementById('nivelEstanteSelect').value = base;
     renderNivelInfo();
   }catch(e){ showToast('❌ '+e.message,'error'); }
+}
+
+// ── ETIQUETAS DYMO (precio idéntico a Precio Inteligente) ──
+async function cargarParametros(){
+  try{
+    const { data, error } = await sb.rpc('get_all_data', { p_user: currentUser.user });
+    if(!error && data){
+      (data.params || []).forEach(r => { try { parametros[r.clave] = JSON.parse(r.valor); } catch(e){} });
+    }
+  }catch(e){}
+}
+function calcProd(p){
+  const tc = parametros.tipoCambio || 27;
+  const costoExtraUSD = parseFloat(p.costo_extra)||0;
+  const costoProvUSD  = parseFloat(p.costo_usd)||0;
+  const fleteUSD      = (parseFloat(p.flete_l)||0) / tc;
+  const costoTotalUSD = costoProvUSD + costoExtraUSD + fleteUSD;
+  const costoTotalLPS = costoTotalUSD * tc;
+  const isv = (p.estado==='Nuevo') ? (parametros.isvNuevo||0.15) : 0;
+  let bandaAuto = 'Bajo';
+  for(const b of (parametros.bandas||[])){ if(costoTotalUSD >= b.desde && costoTotalUSD <= b.hasta){ bandaAuto = b.banda; break; } }
+  const bandaEfectiva = (p.override_banda||'').trim() || bandaAuto;
+  const nivelKey = (p.nivel||'Normal').toLowerCase();   // p.nivel = nivel de PRECIO del producto (no el del estante)
+  const bandaRow = (parametros.bandas||[]).find(b=>b.banda===bandaEfectiva) || {normal:.40};
+  const margenBase = bandaRow[nivelKey] || bandaRow.normal || 0.40;
+  const margenFinal = margenBase + (parseFloat(p.ajuste_manual)||0);
+  const precioNeto = costoTotalLPS * (1 + margenFinal);
+  const precioConISV = (p.estado==='Nuevo') ? precioNeto * (1 + isv) : precioNeto;
+  const descIngresadoPct = parseFloat(p.descuento||0) / 100;
+  const precioFinalDesc = precioConISV * (1 - descIngresadoPct);
+  return { precioConISV, precioFinalDesc };
+}
+function fmtLPS(v){ return 'L ' + parseFloat(v||0).toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+// busca el producto completo (costos) y abre la etiqueta para imprimir en la DYMO
+async function imprimirEtiquetaProducto(sku){
+  try{
+    const { data, error } = await sb.rpc('buscar_producto_sku', { p_user:currentUser.user, p_sku:sku });
+    if(error) throw new Error(error.message);
+    if(!data || !data.found || !data.producto){ showToast('Producto no encontrado','error'); return; }
+    abrirVentanaEtiqueta(data.producto);
+  }catch(e){ showToast('❌ '+e.message,'error'); }
+}
+function abrirVentanaEtiqueta(p){
+  const c = calcProd(p);
+  const precioFinal = fmtLPS(c.precioFinalDesc);
+  const precioAntes = fmtLPS(c.precioConISV);
+  const tieneDesc   = c.precioFinalDesc < c.precioConISV - 0.01;
+  const skuSafe = String(p.sku||'').replace(/[^A-Za-z0-9\-\.]/g,'').substring(0,30) || '0000';
+  const nombre  = String(p.producto||'').length > 42 ? String(p.producto).substring(0,42)+'…' : String(p.producto||'');
+  const win = window.open('','_blank','width=500,height=700');
+  if(!win){ showToast('⚠️ Permití ventanas emergentes para imprimir','warn'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Etiqueta ${skuSafe}</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"><\/script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:#fff;font-family:'Arial Narrow',Arial,sans-serif;}
+    @page{size:88.9mm 28.575mm landscape;margin:0;}
+    .etiqueta{width:88.9mm;height:28.575mm;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4mm 2mm 1mm 2mm;overflow:hidden;}
+    .etiq-nombre{font-size:8pt;font-weight:700;color:#222;width:100%;text-align:center;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:0.5mm;}
+    .etiq-barcode{max-width:86mm;height:11mm;display:block;}
+    .etiq-precios{display:flex;flex-direction:column;align-items:center;margin-top:0.2mm;}
+    .etiq-precio-antes{font-size:8pt;font-weight:600;color:#888;text-decoration:line-through;text-align:center;line-height:1.2;}
+    .etiq-precio{font-size:15pt;font-weight:900;color:#000;text-align:center;letter-spacing:-0.5px;line-height:1.1;}
+    @media print{body{margin:0;}.no-print{display:none;}}
+  </style></head><body>
+  <div class="no-print" style="padding:12px;background:#f0f4ff;border-bottom:1px solid #ccd;font-family:Arial;font-size:13px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+    <strong>🏷️ Etiqueta · DYMO 1-1/8" × 3-1/2"</strong>
+    <button onclick="window.print()" style="padding:8px 18px;background:#3d6aff;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">🖨️ Imprimir</button>
+    <span style="color:#666;font-size:12px;">Elegí la DYMO LabelWriter y tamaño 30252.</span>
+  </div>
+  <div class="etiqueta">
+    <div class="etiq-nombre">${nombre}</div>
+    <svg class="etiq-barcode" id="bc" data-sku="${skuSafe}"></svg>
+    <div class="etiq-precios">
+      ${tieneDesc ? `<div class="etiq-precio-antes">${precioAntes}</div>` : ''}
+      <div class="etiq-precio">${precioFinal}</div>
+    </div>
+  </div>
+  <script>
+    window.onload=function(){
+      try{ JsBarcode('#bc','${skuSafe}',{format:'CODE128',width:2.2,height:38,displayValue:true,fontSize:13,textMargin:3,margin:2,fontOptions:'bold'}); }catch(e){}
+    };
+  <\/script>
+  </body></html>`);
+  win.document.close();
 }
 
 // ── TABS ──
@@ -544,7 +648,8 @@ async function asignarPorSku(sku, confirmar){
     cont.innerHTML = `<div class="prod-card" style="border-color:var(--accent3)">
       <div class="tag" style="background:rgba(46,213,115,.15);color:var(--green)">✓ Asignado a ${data.ubicacion}</div>
       <div class="prod-nombre" style="margin-top:6px">${data.producto}</div>
-      <div class="prod-sku">SKU: ${data.sku}</div></div>`;
+      <div class="prod-sku">SKU: ${data.sku}</div>
+      <button class="btn btn-ghost" style="margin-top:10px" onclick="imprimirEtiquetaProducto('${data.sku}')">🏷️ Imprimir etiqueta</button></div>`;
     showToast(`✅ ${(data.producto||'').slice(0,28)} → ${data.ubicacion}${movido}`, 'success');
     sesion.unshift({ codigo:data.ubicacion, sku:data.sku, nombre:data.producto });
     renderSesion();
@@ -606,7 +711,8 @@ async function ejecutarBuscarUbicacion(sku){
       cont.innerHTML = `<div class="prod-card">
         <div class="prod-nombre">${p.nombre}</div><div class="prod-sku">SKU: ${p.sku}</div>
         <div class="tag" style="background:rgba(255,71,87,.15);color:var(--red)">Sin ubicación asignada</div>
-        <div class="prod-extra">Stock: ${p.cantidad} uds.</div></div>`;
+        <div class="prod-extra">Stock: ${p.cantidad} uds.</div>
+        <button class="btn btn-ghost" style="margin-top:10px" onclick="imprimirEtiquetaProducto('${p.sku}')">🏷️ Imprimir etiqueta</button></div>`;
       return;
     }
     const u = data.ubicacion;
@@ -616,7 +722,8 @@ async function ejecutarBuscarUbicacion(sku){
         <div>📍</div>
         <div><div class="ea-cod">${u.codigo}</div><div class="ea-meta">${u.zona} · Estante ${u.estante}${u.descripcion?' · '+u.descripcion:''}</div></div>
       </div>
-      <div class="prod-extra">Stock: ${p.cantidad} uds.</div></div>`;
+      <div class="prod-extra">Stock: ${p.cantidad} uds.</div>
+      <button class="btn btn-ghost" style="margin-top:10px" onclick="imprimirEtiquetaProducto('${p.sku}')">🏷️ Imprimir etiqueta</button></div>`;
   }catch(e){
     cont.innerHTML = `<div class="prod-card" style="text-align:center;color:var(--red)">❌ ${e.message}</div>`;
   }
