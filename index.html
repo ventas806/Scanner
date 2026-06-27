@@ -591,7 +591,7 @@ function renderProductoCard(p, containerId, ordenesTransito=[]) {
         <button class="qty-btn" onclick="ajustarQty('${p.id}', -1)">−</button>
         <input type="number" class="qty-input" id="qty_${p.id}" value="${cantidad}" min="0">
         <button class="qty-btn" onclick="ajustarQty('${p.id}', 1)">+</button>
-        <button class="save-stock-btn" onclick="guardarStock('${p.id}', '${p.sku}', '${p.producto.replace(/'/g,"\\'")}')">💾 Guardar</button>
+        <button class="save-stock-btn" onclick="guardarStock('${p.id}', '${p.sku}', '${p.producto.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">💾 Guardar</button>
       </div>
     </div>
     <button onclick="abrirCalcDesc()"
