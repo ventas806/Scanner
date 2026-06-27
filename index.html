@@ -591,7 +591,7 @@ function renderProductoCard(p, containerId, ordenesTransito=[]) {
         <button class="qty-btn" onclick="ajustarQty('${p.id}', -1)">−</button>
         <input type="number" class="qty-input" id="qty_${p.id}" value="${cantidad}" min="0">
         <button class="qty-btn" onclick="ajustarQty('${p.id}', 1)">+</button>
-        <button class="save-stock-btn" onclick="guardarStock('${p.id}', '${p.sku}', '${p.producto.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">💾 Guardar</button>
+        <button class="save-stock-btn" onclick="guardarStock('${p.id}')">💾 Guardar</button>
       </div>
     </div>
     <button onclick="abrirCalcDesc()"
@@ -629,13 +629,15 @@ function ajustarQty(id, delta) {
 }
 
 // ── GUARDAR STOCK ──
-async function guardarStock(id, sku, nombre) {
+async function guardarStock(id) {
+  const sku    = _calcProd?.sku ?? '';
+  const nombre = _calcProd?.producto ?? '';
   const input = document.getElementById('qty_'+id);
   if (!input) return;
   const nuevaCantidad = parseInt(input.value);
   if (isNaN(nuevaCantidad) || nuevaCantidad < 0) { showToast('Cantidad inválida','error'); return; }
 
-  const btn = document.querySelector(`[onclick="guardarStock('${id}','${sku}','${nombre.replace(/'/g,"\\'")}')"]`);
+  const btn = document.querySelector(`[onclick="guardarStock('${id}')"]`);
   if (btn) { btn.textContent = '...'; btn.disabled = true; }
 
   try {
