@@ -50,6 +50,8 @@
     .zona{max-width:none;margin:0 0 12px}
     .zona-titulo{color:#000 !important;background:#eee !important}
     .label{border:1px dashed #aaa}
+    /* cada estante empieza en una hoja nueva al imprimir */
+    .zona.salto-pagina{page-break-before:always}
     @page{margin:10mm}
   }
 </style>
@@ -114,53 +116,67 @@ function render(){
   }
   document.getElementById('estado').style.display = 'none';
 
-  // agrupar por zona
+  // agrupar por zona y, dentro de cada zona, por estante
   const porZona = {};
   _ubicaciones.forEach(u => { (porZona[u.zona] = porZona[u.zona] || []).push(u); });
 
   let total = 0;
+  let primerBloque = true;
+
   Object.keys(porZona).forEach(zona => {
-    const items = porZona[zona];
-    total += items.length;
     const color = COLORES[zona] || '#3d6aff';
 
-    const zonaEl = document.createElement('div');
-    zonaEl.className = 'zona';
-    const titulo = document.createElement('div');
-    titulo.className = 'zona-titulo';
-    titulo.style.background = zonaColorOn ? hexA(color,.14) : 'var(--panel)';
-    titulo.innerHTML = `<span class="zona-color" style="background:${color}"></span>
-      ${zona} <span style="color:var(--text2);font-weight:500">· ${items.length} etiquetas</span>`;
-    zonaEl.appendChild(titulo);
+    // subagrupar por estante
+    const porEstante = {};
+    porZona[zona].forEach(u => { (porEstante[u.estante] = porEstante[u.estante] || []).push(u); });
 
-    const grid = document.createElement('div');
-    grid.className = 'grid';
+    // recorrer estantes en orden numérico → un bloque (una hoja) por estante
+    Object.keys(porEstante).sort((a,b) => a - b).forEach(est => {
+      const items = porEstante[est];
+      total += items.length;
 
-    items.forEach(u => {
-      const label = document.createElement('div');
-      label.className = 'label';
-      if(zonaColorOn) label.style.borderColor = color;
+      const zonaEl = document.createElement('div');
+      zonaEl.className = 'zona';
+      // salto de página antes de cada estante (menos el primero)
+      if(!primerBloque) zonaEl.classList.add('salto-pagina');
+      primerBloque = false;
 
-      const qrBox = document.createElement('div');
-      qrBox.className = 'qr';
-      label.appendChild(qrBox);
+      const titulo = document.createElement('div');
+      titulo.className = 'zona-titulo';
+      titulo.style.background = zonaColorOn ? hexA(color,.14) : 'var(--panel)';
+      titulo.innerHTML = `<span class="zona-color" style="background:${color}"></span>
+        ${zona} · Estante ${est} <span style="color:var(--text2);font-weight:500">· ${items.length} etiquetas</span>`;
+      zonaEl.appendChild(titulo);
 
-      const cod = document.createElement('div');
-      cod.className = 'codigo';
-      cod.textContent = u.codigo;
-      label.appendChild(cod);
+      const grid = document.createElement('div');
+      grid.className = 'grid';
 
-      const meta = document.createElement('div');
-      meta.className = 'meta';
-      meta.innerHTML = `${u.zona} · Est. ${u.estante}<br><span class="nivel-tag">NIVEL ${u.nivel}</span>`;
-      label.appendChild(meta);
+      items.forEach(u => {
+        const label = document.createElement('div');
+        label.className = 'label';
+        if(zonaColorOn) label.style.borderColor = color;
 
-      grid.appendChild(label);
-      new QRCode(qrBox, { text:u.codigo, width:QR_SIZE, height:QR_SIZE, correctLevel:QRCode.CorrectLevel.M });
+        const qrBox = document.createElement('div');
+        qrBox.className = 'qr';
+        label.appendChild(qrBox);
+
+        const cod = document.createElement('div');
+        cod.className = 'codigo';
+        cod.textContent = u.codigo;
+        label.appendChild(cod);
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.innerHTML = `${u.zona} · Est. ${u.estante}<br><span class="nivel-tag">NIVEL ${u.nivel}</span>`;
+        label.appendChild(meta);
+
+        grid.appendChild(label);
+        new QRCode(qrBox, { text:u.codigo, width:QR_SIZE, height:QR_SIZE, correctLevel:QRCode.CorrectLevel.M });
+      });
+
+      zonaEl.appendChild(grid);
+      cont.appendChild(zonaEl);
     });
-
-    zonaEl.appendChild(grid);
-    cont.appendChild(zonaEl);
   });
 
   document.getElementById('totalBadge').textContent = total + ' etiquetas';
