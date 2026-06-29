@@ -305,21 +305,33 @@ let parametros = {
 async function doLogin(){
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
-  if(!u||!p){ mostrarErr(true); return; }
+  if(!u||!p){ mostrarErr('Ingresá usuario y contraseña'); return; }
   const btn = document.getElementById('btnLogin');
   btn.innerHTML = '<div class="spinner"></div>'; btn.disabled = true;
   try{
     const { data: rows, error } = await sb.rpc('login_usuario', { p_user:u, p_pass:p });
-    if(error || !rows || rows.length===0){ mostrarErr(true); return; }
+    if(error){
+      const m = error.message || '';
+      if(m.includes('BLOQUEADO')) mostrarErr('🔒 Demasiados intentos. Esperá 15 minutos.');
+      else if(m.includes('CREDENCIALES')) mostrarErr('Usuario o contraseña incorrectos');
+      else mostrarErr('⚠️ Error de conexión. Revisá tu internet e intentá de nuevo.');
+      return;
+    }
+    if(!rows || rows.length===0){ mostrarErr('Usuario o contraseña incorrectos'); return; }
     const r = rows[0];
-    if(!['admin','gerencia','ventas','bodega'].includes(r.rol)){ mostrarErr(true); return; }
+    if(!['admin','gerencia','ventas','bodega'].includes(r.rol)){ mostrarErr('Tu usuario no tiene acceso a esta app'); return; }
     currentUser = { id:r.id, nombre:r.nombre, user:r.user, rol:r.rol };
     await sb.rpc('set_app_user', { p_user: currentUser.user });
     iniciarApp();
-  }catch(e){ mostrarErr(true); }
+  }catch(e){ mostrarErr('⚠️ Error de conexión. Intentá de nuevo.'); }
   finally{ btn.innerHTML='Iniciar Sesión'; btn.disabled=false; }
 }
-function mostrarErr(v){ document.getElementById('loginErr').style.display = v?'block':'none'; }
+function mostrarErr(msg){
+  const el = document.getElementById('loginErr');
+  if(msg===false){ el.style.display='none'; return; }
+  el.textContent = (typeof msg==='string') ? msg : 'Usuario o contraseña incorrectos';
+  el.style.display = 'block';
+}
 
 function iniciarApp(){
   document.getElementById('loginScreen').classList.remove('active');
