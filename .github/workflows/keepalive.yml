@@ -1,0 +1,27 @@
+name: Mantener Supabase despierta
+
+# Hace una peticion liviana a Supabase cada 10 minutos para que el
+# proyecto (plan gratuito) no entre en reposo y el login / busqueda
+# sigan siendo instantaneos. La anon key ya es publica (esta en el HTML),
+# por eso va embebida; no es un secreto nuevo.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # cada 10 minutos
+  workflow_dispatch:          # boton para ejecutarlo a mano
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping a Supabase
+        run: |
+          KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6aGpuZWRobWJ2Z2ZxcXNzdW92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMjA1MTgsImV4cCI6MjA5MDg5NjUxOH0.w8oomn73rEZWqKv4RA56uCrBwv1z4VYnks7fyhafqz8"
+          URL="https://uzhjnedhmbvgfqqssuov.supabase.co/rest/v1/ubicaciones_inventario?select=id&limit=1"
+          CODE=$(curl -sS -o /dev/null -w "%{http_code}" "$URL" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY")
+          echo "Supabase respondio HTTP $CODE"
+          # 200 (o 206) = base activa y respondiendo
+          if [ "$CODE" != "200" ] && [ "$CODE" != "206" ]; then
+            echo "::warning::Respuesta inesperada de Supabase: $CODE"
+          fi
