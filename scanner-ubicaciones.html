@@ -9,7 +9,8 @@
 <meta name="theme-color" content="#0a0c10">
 <title>Focus Store · Ubicaciones</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<!-- html5-qrcode se carga bajo demanda (solo al usar la cámara) para que la app arranque liviana en redes lentas -->
+
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -341,7 +342,8 @@ function iniciarApp(){
     document.getElementById('tabNiveles').style.display = '';
   }
   cargarUbicaciones();
-  cargarParametros();
+  // los parámetros de precio (get_all_data) se cargan recién al imprimir una etiqueta,
+  // no en el login → arranque más rápido en redes lentas
 }
 function doLogout(){
   if(scannerCtrl) stopScanner();
@@ -428,11 +430,14 @@ async function adminQuitarNivel(base){
 }
 
 // ── ETIQUETAS DYMO (precio idéntico a Precio Inteligente) ──
+let _paramsCargados = false;
 async function cargarParametros(){
+  if(_paramsCargados) return;            // se trae una sola vez por sesión
   try{
     const { data, error } = await sb.rpc('get_all_data', { p_user: currentUser.user });
     if(!error && data){
       (data.params || []).forEach(r => { try { parametros[r.clave] = JSON.parse(r.valor); } catch(e){} });
+      _paramsCargados = true;
     }
   }catch(e){}
 }
@@ -465,6 +470,7 @@ async function imprimirEtiquetaProducto(sku){
     const { data, error } = await sb.rpc('buscar_producto_sku', { p_user:currentUser.user, p_sku:sku });
     if(error) throw new Error(error.message);
     if(!data || !data.found || !data.producto){ showToast('Producto no encontrado','error'); return; }
+    await cargarParametros();   // precios: se traen recién ahora (no en el login)
     abrirVentanaEtiqueta(data.producto);
   }catch(e){ showToast('❌ '+e.message,'error'); }
 }
@@ -769,6 +775,20 @@ async function verEstante(codigo){
   }
 }
 
+// carga la librería del escáner (html5-qrcode) solo la primera vez que se usa la cámara
+let _qrLibPromise = null;
+function cargarLibQR(){
+  if(window.Html5Qrcode) return Promise.resolve();
+  if(_qrLibPromise) return _qrLibPromise;
+  _qrLibPromise = new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    s.onload=()=>res(); s.onerror=()=>rej(new Error('No se pudo cargar el escáner'));
+    document.head.appendChild(s);
+  });
+  return _qrLibPromise;
+}
+
 // ── SCANNER (compartido) ──
 async function startScanner(modo){
   scanModo = modo;
@@ -778,6 +798,9 @@ async function startScanner(modo){
     modo==='estante' ? 'Escaneá el QR del estante' : 'Escaneá el código del producto';
   document.getElementById('scanHint').textContent =
     modo==='estante' ? 'Apuntá al QR pegado en el estante' : 'Apuntá al código de barras del producto';
+
+  try{ await cargarLibQR(); }
+  catch(e){ stopScanner(); showToast('No se pudo cargar el escáner. Revisá tu conexión.','error'); return; }
 
   const formats = (modo==='estante')
     ? [ Html5QrcodeSupportedFormats.QR_CODE ]
