@@ -638,6 +638,7 @@ async function asignarPorSku(sku, confirmar){
         <div class="tag ya">⚠️ Ya está en ${data.ubicacion_actual}</div>
         <div class="prod-nombre" style="margin-top:6px">${data.producto}</div>
         <div class="prod-sku">SKU: ${data.sku}</div>
+        <div class="prod-extra">📦 Cantidad actual: <b style="color:var(--text)">${data.cantidad!=null?data.cantidad:'—'}</b> uds.</div>
         <div style="font-size:13px;color:var(--text2);margin-top:10px">¿Moverlo a <b style="color:var(--accent3)">${data.ubicacion_destino}</b>?</div>
         <div class="btn-row" style="margin-top:10px">
           <button class="btn btn-success" onclick="confirmarMover()">✓ Sí, mover</button>
