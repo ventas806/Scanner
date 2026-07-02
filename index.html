@@ -615,9 +615,41 @@ function renderProductoCard(p, containerId, ordenesTransito=[]) {
         </div>
       </div>
       <div class="data-grid">${dataHTML}</div>
+      <div id="ubic_${p.id}" style="margin-top:10px"></div>
       ${caminoHTML}
       ${editorHTML}
     </div>`;
+
+  cargarUbicacion(p.id, p.sku);
+}
+
+// ── UBICACIÓN DEL PRODUCTO ──
+async function cargarUbicacion(id, sku) {
+  const box = document.getElementById('ubic_'+id);
+  if (!box) return;
+  box.innerHTML = `<div style="font-size:12px;color:var(--text2);padding:4px 2px">📍 Buscando ubicación…</div>`;
+  try {
+    const skuLimpio = String(sku).trim().replace(/[\r\n\t]/g,'');
+    const { data, error } = await sb.rpc('ubicacion_de_producto', { p_user: currentUser.user, p_sku: skuLimpio });
+    if (error) throw new Error(error.message);
+    if (!data || !data.found || !data.tiene_ubicacion || !data.ubicacion) {
+      box.innerHTML = `<div style="display:flex;align-items:center;gap:8px;background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.35);border-radius:10px;padding:10px 12px">
+        <span style="font-size:18px">📍</span>
+        <div style="font-size:13px;color:var(--red);font-weight:600">Sin ubicación asignada</div>
+      </div>`;
+      return;
+    }
+    const u = data.ubicacion;
+    box.innerHTML = `<div style="display:flex;align-items:center;gap:10px;background:rgba(0,200,160,.1);border:1px solid rgba(0,200,160,.4);border-radius:10px;padding:10px 12px">
+      <span style="font-size:20px">📍</span>
+      <div>
+        <div style="font-family:monospace;font-size:17px;font-weight:800;color:#00c8a0">${u.codigo}</div>
+        <div style="font-size:12px;color:var(--text2)">${u.zona} · Estante ${u.estante}${u.descripcion?' · '+u.descripcion:''}</div>
+      </div>
+    </div>`;
+  } catch(e) {
+    box.innerHTML = `<div style="font-size:12px;color:var(--text2);padding:4px 2px">📍 Ubicación no disponible</div>`;
+  }
 }
 
 // ── AJUSTAR CANTIDAD ──
