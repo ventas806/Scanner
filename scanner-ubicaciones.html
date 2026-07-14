@@ -434,9 +434,11 @@ let _paramsCargados = false;
 async function cargarParametros(){
   if(_paramsCargados) return;            // se trae una sola vez por sesión
   try{
-    const { data, error } = await sb.rpc('get_all_data', { p_user: currentUser.user });
+    // Solo se necesitan los parámetros de precio → RPC liviano (~11 KB) en vez de get_all_data (~2 MB)
+    const { data, error } = await sb.rpc('get_parametros', { p_user: currentUser.user });
     if(!error && data){
-      (data.params || []).forEach(r => { try { parametros[r.clave] = JSON.parse(r.valor); } catch(e){} });
+      // get_parametros devuelve el array de parámetros directamente
+      (data || []).forEach(r => { try { parametros[r.clave] = JSON.parse(r.valor); } catch(e){} });
       _paramsCargados = true;
     }
   }catch(e){}

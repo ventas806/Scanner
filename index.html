@@ -352,9 +352,10 @@ function mostrarErr(v) {
 
 async function cargarParametros() {
   try {
-    const { data, error } = await sb.rpc('get_all_data', { p_user: currentUser.user });
+    // Solo se necesitan los parámetros de precio → RPC liviano (~11 KB) en vez de get_all_data (~2 MB)
+    const { data, error } = await sb.rpc('get_parametros', { p_user: currentUser.user });
     if (!error && data) {
-      const params = data.params || [];
+      const params = data || [];
       params.forEach(r => {
         try { parametros[r.clave] = JSON.parse(r.valor); } catch(e) {}
       });
