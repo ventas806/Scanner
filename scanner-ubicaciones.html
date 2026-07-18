@@ -303,6 +303,16 @@ let parametros = {
 };
 
 // ── LOGIN (mismo método que sistema principal) ──
+// ── Sesión persistente (8 horas, sobrevive al cierre del navegador) ──
+const SESION_KEY = 'fs_sesion', SESION_HORAS = 8;
+function guardarSesion(u){ try{ const {pass,...l}=u||{}; localStorage.setItem(SESION_KEY, JSON.stringify({user:l, exp:Date.now()+SESION_HORAS*3600*1000})); }catch(e){} }
+function leerSesion(){ try{ const s=JSON.parse(localStorage.getItem(SESION_KEY)||'null'); if(!s||!s.user||!s.exp||Date.now()>s.exp){ localStorage.removeItem(SESION_KEY); return null; } return s.user; }catch(e){ return null; } }
+function limpiarSesion(){ try{ localStorage.removeItem(SESION_KEY); }catch(e){} }
+window.addEventListener('DOMContentLoaded', async ()=>{
+  const _ses = leerSesion();
+  if (_ses && _ses.user) { currentUser = _ses; try{ await sb.rpc('set_app_user', { p_user: currentUser.user }); }catch(e){} iniciarApp(); }
+});
+
 async function doLogin(){
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
@@ -323,6 +333,7 @@ async function doLogin(){
     if(!['admin','gerencia','ventas','bodega'].includes(r.rol)){ mostrarErr('Tu usuario no tiene acceso a esta app'); return; }
     currentUser = { id:r.id, nombre:r.nombre, user:r.user, rol:r.rol };
     await sb.rpc('set_app_user', { p_user: currentUser.user });
+    guardarSesion(currentUser);
     iniciarApp();
   }catch(e){ mostrarErr('⚠️ Error de conexión. Intentá de nuevo.'); }
   finally{ btn.innerHTML='Iniciar Sesión'; btn.disabled=false; }
@@ -346,6 +357,7 @@ function iniciarApp(){
   // no en el login → arranque más rápido en redes lentas
 }
 function doLogout(){
+  limpiarSesion();
   if(scannerCtrl) stopScanner();
   currentUser=null; estanteActivo=null; productoSel=null; sesion=[];
   document.getElementById('appScreen').classList.remove('active');
