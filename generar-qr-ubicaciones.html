@@ -32,6 +32,7 @@
 
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px}
   .label{
+    position:relative;
     background:#fff;color:#000;border:1.5px dashed #999;border-radius:8px;
     padding:12px 10px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:7px;
     page-break-inside:avoid;break-inside:avoid;
@@ -41,6 +42,9 @@
   .label .codigo{font-family:'Consolas',monospace;font-size:15px;font-weight:800;letter-spacing:.3px}
   .label .meta{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#555;line-height:1.3}
   .label .nivel-tag{display:inline-block;background:#eee;border-radius:6px;padding:1px 8px;font-size:11px;font-weight:800;color:#222;margin-top:2px}
+  .label .chk{position:absolute;top:6px;left:6px;width:20px;height:20px;cursor:pointer;accent-color:var(--accent);z-index:2}
+  .zona-titulo .chk-est{width:18px;height:18px;cursor:pointer;accent-color:#fff}
+  @media screen{ .label.sel{box-shadow:0 0 0 3px var(--accent)} }
 
   #estado{max-width:1000px;margin:0 auto;text-align:center;color:var(--text2);padding:30px;font-size:14px}
 
@@ -50,8 +54,12 @@
     .zona{max-width:none;margin:0 0 12px}
     .zona-titulo{color:#000 !important;background:#eee !important}
     .label{border:1px dashed #aaa}
+    .chk, .chk-est{display:none !important}
     /* cada estante empieza en una hoja nueva al imprimir */
     .zona.salto-pagina{page-break-before:always}
+    /* modo "imprimir seleccionados": ocultar lo no marcado y los estantes vacíos */
+    body.imprimir-seleccion .label:not(.sel){display:none !important}
+    body.imprimir-seleccion .zona.sin-seleccion{display:none !important}
     @page{margin:10mm}
   }
 </style>
@@ -68,13 +76,20 @@
     "Guardar como PDF". Cortá por las líneas punteadas y pegá cada etiqueta en su nivel.
   </p>
   <div class="acciones">
-    <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+    <button class="btn btn-print" id="btnImprSel" onclick="imprimirSeleccion()">🖨️ Imprimir seleccionados (0)</button>
+    <button class="btn btn-ghost" onclick="imprimirTodo()">🖨️ Imprimir todo</button>
+    <button class="btn btn-ghost" onclick="marcarTodos(true)">☑️ Marcar todos</button>
+    <button class="btn btn-ghost" onclick="marcarTodos(false)">⬜ Desmarcar</button>
     <button class="btn btn-ghost" onclick="cargar()">🔄 Recargar códigos</button>
-    <button class="btn btn-ghost" onclick="toggleZonaColor()">🎨 Color de zona: <span id="colorState">ON</span></button>
-    <select class="btn btn-ghost" id="zonaFiltro" onchange="render()" style="cursor:pointer">
+    <button class="btn btn-ghost" onclick="toggleZonaColor()">🎨 Color: <span id="colorState">ON</span></button>
+    <select class="btn btn-ghost" id="zonaFiltro" onchange="cambiarZona()" style="cursor:pointer">
       <option value="">📍 Todas las zonas</option>
     </select>
   </div>
+  <p style="font-size:12px;color:var(--text2);margin-top:10px">
+    💡 Marcá las etiquetas que querés (o usá la casilla ☑️ del título para un estante entero) y tocá
+    <strong>Imprimir seleccionados</strong>. Para imprimir toda la zona, usá <strong>Imprimir todo</strong>.
+  </p>
 </div>
 
 <div id="estado">Cargando códigos…</div>
@@ -92,6 +107,7 @@ const COLORES = {
 const QR_SIZE = 130;
 let zonaColorOn = true;
 let _ubicaciones = [];
+let seleccion = new Set();   // códigos marcados para imprimir
 
 async function cargar(){
   document.getElementById('estado').style.display = 'block';
@@ -169,6 +185,18 @@ function render(){
       titulo.style.background = zonaColorOn ? hexA(color,.14) : 'var(--panel)';
       titulo.innerHTML = `<span class="zona-color" style="background:${color}"></span>
         ${zona} · Estante ${est} <span style="color:var(--text2);font-weight:500">· ${items.length} etiquetas</span>`;
+      const chkEst = document.createElement('input');
+      chkEst.type = 'checkbox'; chkEst.className = 'chk-est';
+      chkEst.title = 'Marcar / desmarcar todo el estante';
+      chkEst.onchange = () => {
+        zonaEl.querySelectorAll('.label').forEach(l => {
+          const c = l.querySelector('.chk'); if(c) c.checked = chkEst.checked;
+          l.classList.toggle('sel', chkEst.checked);
+          if(chkEst.checked) seleccion.add(l.dataset.codigo); else seleccion.delete(l.dataset.codigo);
+        });
+        conteoSel();
+      };
+      titulo.insertBefore(chkEst, titulo.firstChild);
       zonaEl.appendChild(titulo);
 
       const grid = document.createElement('div');
@@ -177,7 +205,19 @@ function render(){
       items.forEach(u => {
         const label = document.createElement('div');
         label.className = 'label';
+        label.dataset.codigo = u.codigo;
         if(zonaColorOn) label.style.borderColor = color;
+        if(seleccion.has(u.codigo)) label.classList.add('sel');
+
+        const chk = document.createElement('input');
+        chk.type = 'checkbox'; chk.className = 'chk';
+        chk.checked = seleccion.has(u.codigo);
+        chk.onchange = () => {
+          if(chk.checked){ seleccion.add(u.codigo); label.classList.add('sel'); }
+          else { seleccion.delete(u.codigo); label.classList.remove('sel'); }
+          conteoSel();
+        };
+        label.appendChild(chk);
 
         const qrBox = document.createElement('div');
         qrBox.className = 'qr';
@@ -203,6 +243,7 @@ function render(){
   });
 
   document.getElementById('totalBadge').textContent = total + ' etiquetas';
+  conteoSel();
 }
 
 function toggleZonaColor(){
@@ -214,6 +255,38 @@ function hexA(hex, a){
   const n = parseInt(hex.slice(1),16);
   return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
 }
+
+// ── Selección de etiquetas para imprimir ──
+function conteoSel(){
+  const b = document.getElementById('btnImprSel');
+  if(b) b.textContent = `🖨️ Imprimir seleccionados (${seleccion.size})`;
+}
+function cambiarZona(){ seleccion.clear(); render(); }   // al cambiar de zona, empezar limpio
+function marcarTodos(on){
+  document.querySelectorAll('#contenedor .label').forEach(l => {
+    const c = l.querySelector('.chk'); if(c) c.checked = on;
+    l.classList.toggle('sel', on);
+    if(on) seleccion.add(l.dataset.codigo); else seleccion.delete(l.dataset.codigo);
+  });
+  document.querySelectorAll('.chk-est').forEach(c => c.checked = on);
+  conteoSel();
+}
+function imprimirTodo(){
+  document.body.classList.remove('imprimir-seleccion');
+  window.print();
+}
+function imprimirSeleccion(){
+  if(seleccion.size === 0){ alert('Marcá al menos una etiqueta (o un estante) para imprimir.'); return; }
+  document.querySelectorAll('#contenedor .zona').forEach(z => {
+    z.classList.toggle('sin-seleccion', !z.querySelector('.label.sel'));
+  });
+  document.body.classList.add('imprimir-seleccion');
+  window.print();
+}
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('imprimir-seleccion');
+  document.querySelectorAll('.zona.sin-seleccion').forEach(z => z.classList.remove('sin-seleccion'));
+});
 
 cargar();
 </script>
