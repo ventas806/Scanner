@@ -47,6 +47,8 @@
   @media screen{ .label.sel{box-shadow:0 0 0 3px var(--accent)} }
 
   #estado{max-width:1000px;margin:0 auto;text-align:center;color:var(--text2);padding:30px;font-size:14px}
+  #printSel{display:none}          /* solo se usa al imprimir seleccionados */
+  #printSel{max-width:1000px;margin:0 auto}
 
   @media print{
     body{background:#fff;color:#000;padding:0}
@@ -57,9 +59,9 @@
     .chk, .chk-est{display:none !important}
     /* cada estante empieza en una hoja nueva al imprimir */
     .zona.salto-pagina{page-break-before:always}
-    /* modo "imprimir seleccionados": ocultar lo no marcado y los estantes vacíos */
-    body.imprimir-seleccion .label:not(.sel){display:none !important}
-    body.imprimir-seleccion .zona.sin-seleccion{display:none !important}
+    /* modo "imprimir seleccionados": solo la hoja compacta con lo elegido, sin saltos por estante */
+    body.imprimir-seleccion #contenedor{display:none !important}
+    body.imprimir-seleccion #printSel{display:block !important}
     @page{margin:10mm}
   }
 </style>
@@ -94,6 +96,8 @@
 
 <div id="estado">Cargando códigos…</div>
 <div id="contenedor"></div>
+<!-- hoja compacta para "Imprimir seleccionados" (se llena al vuelo) -->
+<div id="printSel"></div>
 
 <script>
 const SUPABASE_URL = 'https://uzhjnedhmbvgfqqssuov.supabase.co';
@@ -277,15 +281,30 @@ function imprimirTodo(){
 }
 function imprimirSeleccion(){
   if(seleccion.size === 0){ alert('Marcá al menos una etiqueta (o un estante) para imprimir.'); return; }
-  document.querySelectorAll('#contenedor .zona').forEach(z => {
-    z.classList.toggle('sin-seleccion', !z.querySelector('.label.sel'));
+  // armar una sola grilla compacta con lo seleccionado (así se juntan en las mismas hojas)
+  const cont = document.getElementById('printSel');
+  cont.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  _ubicaciones.filter(u => seleccion.has(u.codigo)).forEach(u => {
+    const label = document.createElement('div');
+    label.className = 'label';
+    const qrBox = document.createElement('div'); qrBox.className = 'qr'; label.appendChild(qrBox);
+    const cod = document.createElement('div'); cod.className = 'codigo'; cod.textContent = u.codigo; label.appendChild(cod);
+    const meta = document.createElement('div'); meta.className = 'meta';
+    meta.innerHTML = `${u.zona} · Est. ${u.estante}<br><span class="nivel-tag">NIVEL ${u.nivel}</span>`;
+    label.appendChild(meta);
+    grid.appendChild(label);
+    new QRCode(qrBox, { text:u.codigo, width:QR_SIZE, height:QR_SIZE, correctLevel:QRCode.CorrectLevel.M });
   });
+  cont.appendChild(grid);
   document.body.classList.add('imprimir-seleccion');
   window.print();
 }
 window.addEventListener('afterprint', () => {
   document.body.classList.remove('imprimir-seleccion');
-  document.querySelectorAll('.zona.sin-seleccion').forEach(z => z.classList.remove('sin-seleccion'));
+  const cont = document.getElementById('printSel');
+  if(cont) cont.innerHTML = '';
 });
 
 cargar();
