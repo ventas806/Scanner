@@ -71,6 +71,9 @@
     <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
     <button class="btn btn-ghost" onclick="cargar()">🔄 Recargar códigos</button>
     <button class="btn btn-ghost" onclick="toggleZonaColor()">🎨 Color de zona: <span id="colorState">ON</span></button>
+    <select class="btn btn-ghost" id="zonaFiltro" onchange="render()" style="cursor:pointer">
+      <option value="">📍 Todas las zonas</option>
+    </select>
   </div>
 </div>
 
@@ -101,24 +104,44 @@ async function cargar(){
       .order('zona').order('estante').order('nivel');
     if(error) throw error;
     _ubicaciones = data || [];
+    llenarZonas();
     render();
   }catch(e){
     document.getElementById('estado').textContent = '❌ Error cargando códigos: ' + (e.message || e);
   }
 }
 
+function llenarZonas(){
+  const sel = document.getElementById('zonaFiltro');
+  const prev = sel.value;
+  const zonas = [...new Set(_ubicaciones.map(u => u.zona))].sort();
+  sel.innerHTML = '<option value="">📍 Todas las zonas</option>' +
+    zonas.map(z => `<option value="${z}">${z}</option>`).join('');
+  if(prev && zonas.includes(prev)) sel.value = prev;
+}
+
 function render(){
   const cont = document.getElementById('contenedor');
   cont.innerHTML = '';
   if(!_ubicaciones.length){
+    document.getElementById('estado').style.display = 'block';
     document.getElementById('estado').textContent = 'No hay ubicaciones en la base.';
+    return;
+  }
+
+  // filtro por zona seleccionada (para imprimir solo un local/bodega)
+  const zonaSel = document.getElementById('zonaFiltro').value;
+  const lista = zonaSel ? _ubicaciones.filter(u => u.zona === zonaSel) : _ubicaciones;
+  if(!lista.length){
+    document.getElementById('estado').style.display = 'block';
+    document.getElementById('estado').textContent = 'No hay etiquetas para esa zona.';
     return;
   }
   document.getElementById('estado').style.display = 'none';
 
   // agrupar por zona y, dentro de cada zona, por estante
   const porZona = {};
-  _ubicaciones.forEach(u => { (porZona[u.zona] = porZona[u.zona] || []).push(u); });
+  lista.forEach(u => { (porZona[u.zona] = porZona[u.zona] || []).push(u); });
 
   let total = 0;
   let primerBloque = true;
