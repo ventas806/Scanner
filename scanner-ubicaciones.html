@@ -456,7 +456,7 @@ async function cargarParametros(){
   }catch(e){}
 }
 function calcProd(p){
-  const tc = parametros.tipoCambio || 27;
+  const tc = parseFloat(p.tipo_cambio) || parametros.tipoCambio || 27; // tasa propia del producto
   const costoExtraUSD = parseFloat(p.costo_extra)||0;
   const costoProvUSD  = parseFloat(p.costo_usd)||0;
   const fleteUSD      = (parseFloat(p.flete_l)||0) / tc;
